@@ -494,44 +494,60 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
     // -------------------------------------------------------------------------
     // Schrijf de berekende waardes weg naar het algemene Contact profiel.
     
-    wachthond($extdebug,1, "########################################################################");
-    wachthond($extdebug,1, "### INTAKE REF CONFIG 9.0 UPDATE CONTACT",               "[$displayname]");
-    wachthond($extdebug,1, "########################################################################");
+    wachthond($extdebug, 1, "########################################################################");
+    wachthond($extdebug, 1, "### INTAKE REF CONFIG 9.0 UPDATE CONTACT",               "[$displayname]");
+    wachthond($extdebug, 1, "########################################################################");
 
-    $params_cont_update = [
-        'checkPermissions' => FALSE,
-        'debug'            => $apidebug,          
-        'reload'           => TRUE,
-        'where'            => [['id',   '=',$contact_id]],
-        'values'           => ['id'     =>  $contact_id],
+    // 1. Verzamel alle potentiële wijzigingen
+    $update_values = [
+        'id'                 => $contact_id,
+        'INTAKE.REF_cid'     => $new_cont_refcid     ?? NULL,
+        'INTAKE.REF_naam'    => $new_cont_refnaam    ?? NULL,
+        'INTAKE.REF_datum'   => $new_cont_refdatum   ?? NULL,
+        'INTAKE.REF_persoon' => $new_cont_refpersoon ?? NULL,
+        'INTAKE.REF_nodig'   => $new_cont_refnodig   ?? NULL,
+        'INTAKE.REF_status'  => $new_cont_refstatus  ?? NULL,
     ];
 
-    if ($new_cont_refcid)     { $params_cont_update['values']['INTAKE.REF_cid']     = $new_cont_refcid;     }
-    if ($new_cont_refnaam)    { $params_cont_update['values']['INTAKE.REF_naam']    = $new_cont_refnaam;    }
-    if ($new_cont_refdatum)   { $params_cont_update['values']['INTAKE.REF_datum']   = $new_cont_refdatum;   }
-    if ($new_cont_refpersoon) { $params_cont_update['values']['INTAKE.REF_persoon'] = $new_cont_refpersoon; }
-    if ($new_cont_refnodig)   { $params_cont_update['values']['INTAKE.REF_nodig']   = $new_cont_refnodig;   }
-    if ($new_cont_refstatus)  { $params_cont_update['values']['INTAKE.REF_status']  = $new_cont_refstatus;  }
-
-    // --- CHECK: NEGATIVE STATUS (Annulering) ---
-    // Als de deelnemer geannuleerd is (Negative status), moeten we de intake-velden leegmaken.
+    // 2. CHECK: NEGATIVE STATUS (Annulering)
     $status_data     = find_partstatus();
     $status_negative = $status_data['ids']['Negative'] ?? [];
-    $current_status  = $allpart_array['ditjaar_one_leid_status_id'] ?? NULL;
+    $current_status  = $allpart_array['result_allpart_one_leid_status_id'] ?? NULL;
 
     if (!empty($current_status) && in_array($current_status, $status_negative)) {        
         wachthond($extdebug, 1, "STATUS NEGATIVE DETECTED - CLEARING REF FIELDS", "Status ID: $current_status");
-        $params_cont_update['values']['INTAKE.REF_nodig']   = "";
-        $params_cont_update['values']['INTAKE.REF_status']  = "";
+        $update_values['INTAKE.REF_nodig']  = NULL; // Gebruik NULL ipv "" voor PHP 8 stabiliteit
+        $update_values['INTAKE.REF_status'] = NULL;
     }
 
-    // Execute Contact Update
-    if (count($params_cont_update['values']) > 1) { 
-        wachthond($extdebug,2, 'Params voor Contact Update',    $params_cont_update);
-        $result_cont_update = civicrm_api4('Contact','update',  $params_cont_update);
-        wachthond($extdebug,9, 'Result Contact Update',         $result_cont_update);
+    // 3. Filter de array: verwijder NULL waarden en lege strings om vervuiling te voorkomen
+    $clean_values = array_filter($update_values, function($v) {
+        return ($v !== NULL && $v !== "");
+    });
+
+    // 4. Execute Contact Update (alleen als er meer dan alleen de 'id' in de array zit)
+    if (count($clean_values) > 1) { 
+        
+        $params_cont_update = [
+            'checkPermissions' => FALSE,
+            'debug'            => $apidebug,          
+            'where'            => [['id', '=', $contact_id]],
+            'values'           => $clean_values,
+        ];
+
+        wachthond($extdebug, 2, 'Params voor Contact Update', $params_cont_update);
+        
+        try {
+            // Gebruik de 'update' actie zonder 'reload' als dat niet strikt nodig is voor de flow
+            $result_cont_update = civicrm_api4('Contact', 'update', $params_cont_update);
+            wachthond($extdebug, 9, 'Result Contact Update', $result_cont_update);
+        } catch (\Throwable $e) {
+            // Throwable vangt zowel Exceptions als PHP 8 TypeErrors af
+            wachthond($extdebug, 1, "FATAAL: Fout bij Contact Update: " . $e->getMessage(), "[ERROR]");
+        }
+        
     } else {
-        wachthond($extdebug,2, 'Contact Update Skipped', 'Geen wijzigingen gevonden');
+        wachthond($extdebug, 2, 'Contact Update Skipped', 'Geen wijzigingen gevonden na filtering');
     }
 
     // -------------------------------------------------------------------------

@@ -676,6 +676,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
         wachthond($extdebug, 2, 'fot_data', $fot_data); 
         intake_inject_params($params,$keys, $fot_data, "FOT");
 
+/*
         // --- 2.2 IMAGE URL INJECTIE (CORE FIELD) ---
         // Als de status 0 is (geen foto), injecteren we de placeholder direct in de params
         if ($foto_res['status'] == 0 && ($foto_res['current_url'] !== $foto_res['placeholder_url'])) {
@@ -686,6 +687,15 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
             
             wachthond($extdebug, 2, "FOT Inject Core", "image_URL gezet naar placeholder");
         }
+*/
+        if ($foto_res['status'] == 0 && ($foto_res['current_url'] !== $foto_res['placeholder_url'])) {
+            // Injecteer via de numerieke index om de array-structuur intact te houden
+            $params[] = [
+                'column_name' => 'image_URL',
+                'value'       => $foto_res['placeholder_url']
+            ];
+            wachthond($extdebug, 2, "FOT Inject Core", "image_URL veilig toegevoegd aan params");
+        }        
 
         wachthond($extdebug, 2, "########################################################################");
         wachthond($extdebug, 1, "### INTAKE [PRE] 3.0 CONFIGURE NAW STATUS",                "[$displayname]");
