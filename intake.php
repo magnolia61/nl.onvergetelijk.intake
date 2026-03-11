@@ -13,14 +13,21 @@ use CRM_Intake_ExtensionUtil as E;
 
 function intake_civicrm_pre($op, $objectName, $id, &$params) {
 
+    $extdebug   = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $apidebug   = FALSE;
+
+    wachthond($extdebug, 3, "INTAKE PRE PARAMS 0", $params);
+
     // 1. CHECK HETZELFDE SLOT
     // Als customPre bezig is, stoppen we hier ook.
     if (intake_recursion_lock()) {
         return; 
     }
 
-    $extdebug   = 0;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug   = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug   = FALSE;
+
+    wachthond($extdebug, 3, "INTAKE PRE PARAMS", $params);
 
     if ($objectName === 'Individual' && $op === 'edit') {
     
@@ -73,11 +80,25 @@ function intake_civicrm_pre($op, $objectName, $id, &$params) {
                         
                         wachthond($extdebug, 1, "MATCH: Foto gewijzigd (en geen placeholder). Datum-veld wordt klaargezet in params.");
 
+                        // 1. Bereken de waarden eerst in tussen-parameters voor makkelijke debugging
+                        $new_fot_update = format_civicrm_smart('now', 'fot_update_2253'); //
+                        $new_fot_status = 1; // Status 'geupload'
+
+                        // 2. Gooi ze in de watchdog
+                        wachthond($extdebug, 3, "FOTO update waarde: [$new_fot_update]"); //
+                        wachthond($extdebug, 3, "FOTO status waarde: [$new_fot_status]"); //
+
+                        // 3. Wijs ze toe aan de lopende transactie
+                        // BELANGRIJK: Gebruik in een 'pre'-hook voor Individual de custom_ID notatie.
+                        // Dit voorkomt de "Invalid type" error omdat de core validator punten (.) in sleutels vaak niet begrijpt.
+                        $params['custom_2253'] = $new_fot_update; 
+                        $params['custom_1798'] = $new_fot_status;
+/*
                         // We voegen de datum direct toe aan de lopende transactie
                         // Gebruik de exacte API-naam: Groep_Naam.Veld_Naam
                         $params['Intake.fot_update_2253'] = format_civicrm_smart('now', 'fot_update_2253');
-                        $params['Intake.fot_status_1798'] = 1;
-
+                        $params['Intake.fot_status_1798'] = 1;                    
+*/
                         // DIRECT SCHONEN voor APIv4 / Drupal Entity compatibiliteit
                         if (function_exists('drupal_timestamp_sweep')) {
                             drupal_timestamp_sweep($params);
@@ -921,10 +942,10 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
         $ref_resultaat = intake_ref_configure(
             $contact_id, 
             $part_id, 
-            $params,            // <--- ESSENTIEEL: Wordt 'by reference' doorgegeven en direct bijgewerkt
-            $allpart_array,
-            $part_array,           
-            $groupID
+            $params, 
+            $allpart_array, 
+            $part_array, 
+            $grensrefnoggoed
         );
 
         wachthond($extdebug, 3, "grensrefnoggoed",  $grensrefnoggoed);
@@ -1009,6 +1030,13 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
 
     $contact_values     = [];
 
+    // Initialiseer resultaat arrays om 'undefined variable' errors te voorkomen
+    $fot                = ['status' => ''];
+    $naw                = ['status' => '', 'nodig' => '', 'gecheckt' => ''];
+    $bio                = ['status' => '', 'nodig' => '', 'gecheckt' => ''];
+    $ref                = ['status' => '', 'nodig' => ''];
+    $vog                = ['status' => '', 'nodig' => '', 'laatste' => '', 'verzoek' => '', 'aanvraag' => '', 'datum' => ''];
+
     wachthond($extdebug,3, "########################################################################");
     wachthond($extdebug,2, "### INTAKE - CONFIGURE",                                        "[START]");
     wachthond($extdebug,3, "########################################################################");
@@ -1032,6 +1060,9 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     $pos_part_id_deel   = (int)($allpart_array['result_allpart_pos_deel_part_id']   ?? 0);
     $pos_part_id_leid   = (int)($allpart_array['result_allpart_pos_leid_part_id']   ?? 0);
     wachthond($extdebug,4, 'allpart_array',     $allpart_array);
+
+    $part_rol           = $allpart_array['part_rol']                                ?? NULL;
+    $part_functie       = $allpart_array['part_functie']                            ?? NULL;
 
     wachthond($extdebug,3, 'pos_part_id',       $part_id);
     wachthond($extdebug,3, 'pos_part_id_deel',  $pos_part_id_deel);
@@ -1067,8 +1098,11 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     wachthond($extdebug,2, "### INTAKE - 0.4 BEPAAL GRENSNOGGOED & FISCALYEAR");
     wachthond($extdebug,3, "########################################################################");
 
-    $grensnoggoed1          = $intake_config['noggoed1'] ?? NULL; // De 1-jaar grens
-    $grensnoggoed3          = $intake_config['noggoed3'] ?? NULL; // De 3-jaar grens
+    $grensvognoggoed    = $grensnoggoed3; // Default
+    $grensrefnoggoed    = $grensnoggoed3; // Default
+
+    $grensnoggoed1      = $intake_config['noggoed1'] ?? NULL; // De 1-jaar grens
+    $grensnoggoed3      = $intake_config['noggoed3'] ?? NULL; // De 3-jaar grens
 
     wachthond($extdebug, 3, 'grensnoggoed1', $grensnoggoed1);
     wachthond($extdebug, 3, 'grensnoggoed3', $grensnoggoed3);

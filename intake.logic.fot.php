@@ -81,13 +81,22 @@ function intake_check_fotostatus($contact_foto, $fot_update, $geslacht, $fiscaly
 
         // C. Checken of bestand bestaat en afmetingen ophalen
         if (!empty($local_path)) {
-            $file_check = intake_check_fotofile($local_path, $extdebug);
+
+            // 1. Eerst resizen als dat nodig is (vóór de check)
+            // Dit zorgt ervoor dat getimagesize in de volgende stap niet crasht op te grote bestanden
+            if (is_file($local_path)) {
+                intake_resize_foto($local_path, 2160);
+            }
+
+            // 2. Nu de controle uitvoeren (haalt de nieuwe, juiste afmetingen op)
+            $file_check = intake_check_fotofile($local_path);
 
             // 1. Is het bestand weg of corrupt?
             if ($file_check['isfile'] === 0 || $file_check['getsize'] === 0) {
                 wachthond($extdebug, 1, "FOTO CHECK FAIL", "Bestand niet gevonden/corrupt: $local_path");
                 $status = 0; // Harde reset naar placeholder
             } 
+
             // 2. Bestand is in orde -> Check vierkant
             else {
                 $w = $file_check['width'];
@@ -142,7 +151,7 @@ function intake_check_fotostatus($contact_foto, $fot_update, $geslacht, $fiscaly
  * Helper: Valideer of een lokaal pad bestaat, een plaatje is én geef afmetingen terug.
  * * @return array ['isfile' => 0/1, 'getsize' => 0/1, 'width' => int, 'height' => int]
  */
-function intake_check_fotofile($path, $extdebug) {
+function intake_check_fotofile($path) {
 
     $extdebug = 3; // Hardcoded debug
 
@@ -160,7 +169,7 @@ function intake_check_fotofile($path, $extdebug) {
     // 1. Check fysiek bestaan
     if (is_file($path)) {
         $result['isfile'] = 1;
-        
+
         // 2. Check header en afmetingen
         $image_info = @getimagesize($path);
         
@@ -176,4 +185,59 @@ function intake_check_fotofile($path, $extdebug) {
     } 
 
     return $result;
+}
+
+/**
+ * Verkleint een afbeelding op de server als deze groter is dan de opgegeven limiet.
+ * Gebruikt ImageMagick 'magick' voor een schone conversie.
+ *
+ * @param string $path      Het absolute pad naar het bestand.
+ * @param int $max_dim      De maximale breedte of hoogte (standaard 2160).
+ * @param int $extdebug     Debug niveau voor wachthond.
+ * @return bool             True als resize gelukt is of niet nodig was, False bij error.
+ */
+function intake_resize_foto($path, $max_dim = 2160) {
+    
+    $extdebug = 3;
+
+    if (!is_file($path)) {
+        return false;
+    }
+
+    $image_info = @getimagesize($path);
+    if (!$image_info) {
+        return false;
+    }
+
+    $w = $image_info[0];
+    $h = $image_info[1];
+
+    // Alleen actie ondernemen als de foto groter is dan de limiet
+    if ($w > $max_dim || $h > $max_dim) {
+        
+        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug, 1, "### AUTO-RESIZE [PROCESS] 1.0 - BESTAND TE GROOT ($w x $h)", "[IMAGE]");
+        wachthond($extdebug, 2, "########################################################################");
+
+        // De '>' zorgt dat ImageMagick alleen verkleint, nooit vergroot.
+        // -strip verwijdert alle corrupte of zware metadata (EXIF/headers).
+        $cmd = sprintf("magick %s -resize '%dx%d>' -strip -quality 85 %s", 
+            escapeshellarg($path), 
+            $max_dim, 
+            $max_dim, 
+            escapeshellarg($path)
+        );
+
+        exec($cmd, $output, $return_var);
+
+        if ($return_var === 0) {
+            wachthond($extdebug, 3, "### [SUCCESS] Resize voltooid voor: " . basename($path));
+            return true;
+        } else {
+            wachthond($extdebug, 1, "### [ERROR] Magick resize mislukt voor: " . basename($path));
+            return false;
+        }
+    }
+
+    return true; // Geen resize nodig
 }
