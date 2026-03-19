@@ -11,7 +11,7 @@
  */
 function intake_check_fotostatus($contact_foto, $fot_update, $geslacht, $fiscalyear_start) {
 
-    $extdebug = 3; // Zet op 3 voor volledige logging
+    $extdebug = 0; // Zet op 3 voor volledige logging
 
     // --- CONFIGURATIE PADEN (Server specifiek) ---
     $web_root = '/var/www/vhosts/ozkprod/web';
@@ -153,7 +153,7 @@ function intake_check_fotostatus($contact_foto, $fot_update, $geslacht, $fiscaly
  */
 function intake_check_fotofile($path) {
 
-    $extdebug = 3; // Hardcoded debug
+    $extdebug = 0; // Hardcoded debug
 
     $result = array(
         'isfile'  => 0,
@@ -198,7 +198,7 @@ function intake_check_fotofile($path) {
  */
 function intake_resize_foto($path, $max_dim = 2160) {
     
-    $extdebug = 3;
+    $extdebug = 0;
 
     if (!is_file($path)) {
         return false;

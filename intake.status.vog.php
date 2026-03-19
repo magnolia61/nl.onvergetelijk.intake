@@ -7,7 +7,7 @@
  */
 function intake_status_vogverzoek($part_array, $allpart_array, $intake_array) {
 
-    $extdebug       = 3;  // 1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug       = 0;  // 1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug       = FALSE;
     $today_datetime = date("Y-m-d H:i:s");    
 
@@ -129,7 +129,7 @@ function intake_status_vogverzoek($part_array, $allpart_array, $intake_array) {
  */
 function intake_status_vogaanvraag($contact_id, $part_array, $array_intake) {
 
-    $extdebug               = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug               = 0;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug               = FALSE;
     $today_datetime         = date("Y-m-d H:i:s");    
 
@@ -288,7 +288,7 @@ function intake_status_vogaanvraag($contact_id, $part_array, $array_intake) {
  */
 function intake_status_vogontvangst($contact_id, $part_array, $array_intake) {
 
-    $extdebug       = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug       = 0;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug       = FALSE;
     $today_datetime = date("Y-m-d H:i:s");    
 

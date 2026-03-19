@@ -13,7 +13,7 @@
 
 function intake_vog_configure($contact_id, $part_id, &$params = [], $allpart_array = [], $part_array = [], $context = 'direct') {
 
-    $extdebug           = 3; 
+    $extdebug           = 0; 
     $apidebug           = FALSE;
     $today              = date('Y-m-d');
     $intake_start_tijd  = microtime(TRUE);

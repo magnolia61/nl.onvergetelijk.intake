@@ -1,4 +1,4 @@
- <?php
+<?php
 
 require_once 'intake.civix.php';
 require_once __DIR__ . '/intake.helpers.php';
@@ -16,7 +16,7 @@ function intake_civicrm_pre($op, $objectName, $id, &$params) {
     $extdebug   = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug   = FALSE;
 
-    wachthond($extdebug, 3, "INTAKE PRE PARAMS 0", $params);
+//  wachthond($extdebug,0, "INTAKE PRE PARAMS 0", $params);
 
     // 1. CHECK HETZELFDE SLOT
     // Als customPre bezig is, stoppen we hier ook.
@@ -27,12 +27,12 @@ function intake_civicrm_pre($op, $objectName, $id, &$params) {
     $extdebug   = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug   = FALSE;
 
-    wachthond($extdebug, 3, "INTAKE PRE PARAMS", $params);
-
     if ($objectName === 'Individual' && $op === 'edit') {
     
         // 1. Check of er een image_URL in de update-poging zit
         if (isset($params['image_URL'])) {
+
+            wachthond($extdebug,3, "INTAKE PRE PARAMS", $params);
 
             // 2. SLOT DICHTDOEN
             intake_recursion_lock(true);
@@ -47,7 +47,7 @@ function intake_civicrm_pre($op, $objectName, $id, &$params) {
             // Als de nieuwe foto een placeholder is, hoeven we de 'fot_update' datum niet aan te passen.
             if (str_contains(strtolower($newImage), 'placeholder')) {
                 
-                wachthond($extdebug, 1, "SKIP: Nieuwe afbeelding is een placeholder. Datum en status worden NIET bijgewerkt.");
+                wachthond($extdebug,1, "SKIP: Nieuwe afbeelding is een placeholder. Datum en status worden NIET bijgewerkt.");
 
             } else { 
                 // ALLEEN UITVOEREN ALS HET GEEN PLACEHOLDER IS
@@ -72,50 +72,48 @@ function intake_civicrm_pre($op, $objectName, $id, &$params) {
                     // Fallback / Extra check via DAO
                     $oldImage   = CRM_Core_DAO::singleValueQuery("SELECT image_URL FROM civicrm_contact WHERE id = %1", [1 => [$id, 'Integer']]);
 
-                    wachthond($extdebug, 3, "FOTO Vergelijking: [OUD: $oldImage]");
-                    wachthond($extdebug, 3, "FOTO Vergelijking: [NEW: $newImage]");
+                    wachthond($extdebug,3, "FOTO Vergelijking: [OUD: $oldImage]");
+                    wachthond($extdebug,3, "FOTO Vergelijking: [NEW: $newImage]");
 
                     // 3. Vergelijk oud met nieuw
                     if ($newImage !== $oldImage) {
                         
-                        wachthond($extdebug, 1, "MATCH: Foto gewijzigd (en geen placeholder). Datum-veld wordt klaargezet in params.");
+                        wachthond($extdebug,1, "MATCH: Foto gewijzigd (en geen placeholder). Datum-veld wordt klaargezet in params.");
 
                         // 1. Bereken de waarden eerst in tussen-parameters voor makkelijke debugging
                         $new_fot_update = format_civicrm_smart('now', 'fot_update_2253'); //
                         $new_fot_status = 1; // Status 'geupload'
 
                         // 2. Gooi ze in de watchdog
-                        wachthond($extdebug, 3, "FOTO update waarde: [$new_fot_update]"); //
-                        wachthond($extdebug, 3, "FOTO status waarde: [$new_fot_status]"); //
+                        wachthond($extdebug,3, "FOTO update waarde: [$new_fot_update]"); //
+                        wachthond($extdebug,3, "FOTO status waarde: [$new_fot_status]"); //
 
                         // 3. Wijs ze toe aan de lopende transactie
                         // BELANGRIJK: Gebruik in een 'pre'-hook voor Individual de custom_ID notatie.
                         // Dit voorkomt de "Invalid type" error omdat de core validator punten (.) in sleutels vaak niet begrijpt.
                         $params['custom_2253'] = $new_fot_update; 
                         $params['custom_1798'] = $new_fot_status;
-/*
-                        // We voegen de datum direct toe aan de lopende transactie
-                        // Gebruik de exacte API-naam: Groep_Naam.Veld_Naam
-                        $params['Intake.fot_update_2253'] = format_civicrm_smart('now', 'fot_update_2253');
-                        $params['Intake.fot_status_1798'] = 1;                    
-*/
+
                         // DIRECT SCHONEN voor APIv4 / Drupal Entity compatibiliteit
                         if (function_exists('drupal_timestamp_sweep')) {
                             drupal_timestamp_sweep($params);
                         }
                         
                     } else {
-                        wachthond($extdebug, 3, "SKIP: Geen wijziging in foto gedetecteerd.");
+                        wachthond($extdebug,3, "SKIP: Geen wijziging in foto gedetecteerd.");
                     }
 
                 } catch (\Exception $e) {
-                    wachthond($extdebug, 1, "FATAAL: Fout in APIv4 photo get: " . $e->getMessage());
+                    wachthond($extdebug,1, "FATAAL: Fout in APIv4 photo get: " . $e->getMessage());
                 }
             } // Einde else (geen placeholder)
 
+            wachthond($extdebug,3, "INTAKE PRE PARAMS F", $params);
+
         } else {
-            wachthond($extdebug, 4, "Geen image_URL in params gevonden.");
+            wachthond($extdebug,4, "Geen image_URL in params gevonden.");
         }
+
     }
 
     // DOE DE TIMESTAMP SWEEP OM DE PARAMS TE SANITIZEN
@@ -129,8 +127,10 @@ function intake_civicrm_pre($op, $objectName, $id, &$params) {
 
 function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array &$params): void {
 
-    // 1. Initialiseer debug (voorkom TypeError)
-    $extdebug = 0; 
+    // 1. Initialiseer debug
+    $extdebug = 3; 
+
+    $params_org        = $params;
 
     // 2. Definieer relevante groepen
     $profilecontintake = array(181);
@@ -153,7 +153,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
 
     // 5. Globale lock check (Recursion Lock)
     if (intake_recursion_lock()) {
-        wachthond($extdebug, 1, "### DEBUG: GLOBAL LOCK IS ACTIEF - SCRIPT STOPT");
+        wachthond($extdebug,1, "### DEBUG: GLOBAL LOCK IS ACTIEF - SCRIPT STOPT");
         return; 
     }
 
@@ -162,18 +162,18 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
     intake_recursion_lock(true);    
 
     wachthond($extdebug,4, "########################################################################");
-    wachthond($extdebug, 1, "### START INTAKE PROCESSING voor Entity: $entityID", "[group: $groupID]");
+    wachthond($extdebug,1, "### START INTAKE PROCESSING voor Entity: $entityID", "[group: $groupID]");
     wachthond($extdebug,4, "########################################################################");
 
     $intake_start_tijd      = microtime(TRUE);
 
-    $extdebug_general       = 0;    // ALGEMENE DELEN DIE ALTIJD PLAATSVINDEN
-    $extdebug_intake_cont   = 0;    //  1 = basic // 2 = verbose // 3 = params / 4 = results
-    $extdebug_intake_part   = 0;    //  1 = basic // 2 = verbose // 3 = params / 4 = results
-    $extdebug_cont_ref      = 0;    //  DEBUG profiel contact_intake
-    $extdebug_cont_vog      = 0;    //  DEBUG profiel contact_intake
-    $extdebug_part_ref      = 0;    //  DEBUG participant profielen VOG & REF
-    $extdebug_part_vog      = 0;    //  DEBUG participant profielen VOG & REF
+    $extdebug_general       = 3;    // ALGEMENE DELEN DIE ALTIJD PLAATSVINDEN
+    $extdebug_intake_cont   = 3;    //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug_intake_part   = 3;    //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug_cont_ref      = 3;    //  DEBUG profiel contact_intake
+    $extdebug_cont_vog      = 3;    //  DEBUG profiel contact_intake
+    $extdebug_part_ref      = 3;    //  DEBUG participant profielen VOG & REF
+    $extdebug_part_vog      = 3;    //  DEBUG participant profielen VOG & REF
     $extdebug               = $extdebug_general;
 
     $apidebug               = FALSE;
@@ -217,7 +217,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
             $processing_intake_custompre = false;
             intake_recursion_lock(false);
             
-            wachthond($extdebug, 2, "SKIP: Veld '$column_name' is geen intake trigger.");
+            wachthond($extdebug,2, "SKIP: Veld '$column_name' is geen intake trigger.");
             return;
         }
     }    
@@ -244,7 +244,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
     $foundIntakePrefixes_VOG = in_array('vog_', $found_prefixes) ? 1 : 0;
 
     // Eén duidelijke log-regel in plaats van zes losse blokken
-    wachthond($extdebug, 4, "INTAKE CATEGORIEËN IN PUSH: " . (implode(', ', $found_prefixes) ?: 'geen'));
+    wachthond($extdebug,4, "INTAKE CATEGORIEËN IN PUSH: " . (implode(', ', $found_prefixes) ?: 'geen'));
 
     wachthond($extdebug,1, "########################################################################");
     wachthond($extdebug,1, "### INTAKE [PRE] 0.X VERWERK DATA IN PROFILE INTAKE","[groupID: $groupID]");
@@ -281,7 +281,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
 
     // Veiligheidscheck: Hebben we een contact? Zo niet, stop.
     if (!$contact_id) {
-        wachthond($extdebug, 1, "ERROR: Geen Contact ID gevonden voor group $groupID / entity $entityID");
+        wachthond($extdebug,1, "ERROR: Geen Contact ID gevonden voor group $groupID / entity $entityID");
         return;
     }
 
@@ -321,35 +321,35 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
 
     if ($pos_part_id_leid > 0) {
         $target_part_id = $pos_part_id_leid;
-        wachthond($extdebug, 3, "ID SELECTIE: PRIO 1 - Bevestigde Leiding gekozen (dominant over deelnemer)",   "ID: $target_part_id");
+        wachthond($extdebug,3, "ID SELECTIE: PRIO 1 - Bevestigde Leiding gekozen (dominant over deelnemer)",   "ID: $target_part_id");
     } 
     elseif ($one_part_id_leid > 0) {
         $target_part_id = $one_part_id_leid;
-        wachthond($extdebug, 3, "ID SELECTIE: PRIO 2 - Enige Leiding registratie gekozen (intentie is leiding)", "ID: $target_part_id");
+        wachthond($extdebug,3, "ID SELECTIE: PRIO 2 - Enige Leiding registratie gekozen (intentie is leiding)", "ID: $target_part_id");
     } 
     elseif ($pos_part_id_deel > 0) {
         $target_part_id = $pos_part_id_deel;
-        wachthond($extdebug, 3, "ID SELECTIE: PRIO 3 - Bevestigde Deelnemer gekozen (geen leiding gevonden)",   "ID: $target_part_id");
+        wachthond($extdebug,3, "ID SELECTIE: PRIO 3 - Bevestigde Deelnemer gekozen (geen leiding gevonden)",   "ID: $target_part_id");
     } 
     elseif ($one_part_id_deel > 0) {
         $target_part_id = $one_part_id_deel;
-        wachthond($extdebug, 3, "ID SELECTIE: PRIO 4 - Enige Deelnemer registratie gekozen (bv. wachtlijst)",   "ID: $target_part_id");
+        wachthond($extdebug,3, "ID SELECTIE: PRIO 4 - Enige Deelnemer registratie gekozen (bv. wachtlijst)",   "ID: $target_part_id");
     } 
     elseif ($part_id > 0) {
         // PRIO 5: Fallback naar de trigger ID (als find_allpart niets vindt voor dit jaar)
         $target_part_id = $part_id;
-        wachthond($extdebug, 3, "ID SELECTIE: PRIO 5 - Fallback naar Trigger ID (geen andere inschrijvingen)",  "ID: $target_part_id");
+        wachthond($extdebug,3, "ID SELECTIE: PRIO 5 - Fallback naar Trigger ID (geen andere inschrijvingen)",  "ID: $target_part_id");
     }
     else {
         // Veiligheidje voor als er echt helemaal niets is
-        wachthond($extdebug, 1, "ID SELECTIE: ERROR - Geen geschikte Target Part ID kunnen bepalen");
+        wachthond($extdebug,1, "ID SELECTIE: ERROR - Geen geschikte Target Part ID kunnen bepalen");
     }
 
     $ditjaar_pos_leid_kampfunctie = (string)($allpart_array['result_allpart_pos_leid_kampfunctie']  ?? '');
     $ditjaar_pos_leid_kampkort    = (string)($allpart_array['result_allpart_pos_leid_kampkort']     ?? '');
 
-    wachthond($extdebug, 3, "CHECK: Deelnemer ID: $pos_part_id_deel | Leiding ID: $pos_part_id_leid");
-    wachthond($extdebug, 3, "DATA: Kamp: $ditjaar_pos_leid_kampkort | Functie: $ditjaar_pos_leid_kampfunctie");
+    wachthond($extdebug,3, "CHECK: Deelnemer ID: $pos_part_id_deel | Leiding ID: $pos_part_id_leid");
+    wachthond($extdebug,3, "DATA: Kamp: $ditjaar_pos_leid_kampkort | Functie: $ditjaar_pos_leid_kampfunctie");
 
     wachthond($extdebug,2, "########################################################################");
     wachthond($extdebug,1, "### INTAKE [PRE] 0.3 HAAL PART DATA OP VAN PRIMAIRE REGISTRATIE","[PART]");
@@ -362,9 +362,9 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
         $part_array = base_pid2part($target_part_id);
         wachthond($extdebug,4, "part_array", $part_array);
 
-        wachthond($extdebug, 4, "PART DATA OPGEHAALD voor ID $target_part_id", $part_array);
+        wachthond($extdebug,4, "PART DATA OPGEHAALD voor ID $target_part_id", $part_array);
     } else {
-        wachthond($extdebug, 3, "GEEN PARTICIPATIE DATA OP TE HALEN");
+        wachthond($extdebug,3, "GEEN PARTICIPATIE DATA OP TE HALEN");
     }
 
     wachthond($extdebug,1, "########################################################################");
@@ -422,12 +422,12 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
         wachthond($extdebug,3, 'cont_biostatus',        $cont_biostatus);
 
         if ($curcv_keer_leid > 0) {
-            wachthond($extdebug,3, 'cont_reflaatste',       $cont_reflaatste);
-            wachthond($extdebug,3, 'cont_voglaatste',       $cont_voglaatste);
-            wachthond($extdebug,3, 'cont_refnodig',         $cont_refnodig);
-            wachthond($extdebug,3, 'cont_vognodig',         $cont_vognodig);
-            wachthond($extdebug,3, 'cont_refstatus',        $cont_refstatus);
-            wachthond($extdebug,3, 'cont_vogstatus',        $cont_vogstatus);
+            wachthond($extdebug,3, 'cont_reflaatste',   $cont_reflaatste);
+            wachthond($extdebug,3, 'cont_voglaatste',   $cont_voglaatste);
+            wachthond($extdebug,3, 'cont_refnodig',     $cont_refnodig);
+            wachthond($extdebug,3, 'cont_vognodig',     $cont_vognodig);
+            wachthond($extdebug,3, 'cont_refstatus',    $cont_refstatus);
+            wachthond($extdebug,3, 'cont_vogstatus',    $cont_vogstatus);
         }
 
         $new_cont_belangstelling    = $cont_belangstelling;
@@ -557,8 +557,8 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
             $grensrefnoggoed = $grensnoggoed3;  // trek voor groepsleiding vog & ref samen
         }
 
-        wachthond($extdebug, 3, "LIMIT CHECK ROL",   "Functie: $part_functie ($grensnoggoedjaar jr)");
-        wachthond($extdebug, 3, "LIMIT CHECK GRENS", "VOG Grens: $grensvognoggoed | REF Grens: $grensrefnoggoed");
+        wachthond($extdebug,3, "LIMIT CHECK ROL",   "Functie: $part_functie ($grensnoggoedjaar jr)");
+        wachthond($extdebug,3, "LIMIT CHECK GRENS", "VOG Grens: $grensvognoggoed | REF Grens: $grensrefnoggoed");
     }
 
     #########################################################################
@@ -661,7 +661,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
                 $displayRaw     = is_array($rawVal)   ? 'ARRAY' : (string)$rawVal;
                 $displayClean   = is_array($$varName) ? 'ARRAY' : (string)$$varName;
                 
-                wachthond($extdebug, 4, "Smart Processing [$col]", 
+                wachthond($extdebug,4, "Smart Processing [$col]", 
                     "Var: $$varName | Index: $index | Raw: $displayRaw | Clean: $displayClean"
                 );
             }
@@ -685,7 +685,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
             $geslacht, 
             $today_fiscalyear_start
         );
-        wachthond($extdebug, 2, 'foto_res', $foto_res); 
+        wachthond($extdebug,2, 'foto_res', $foto_res); 
 
         // --- 2.1 FOTO INJECTIE (CUSTOM FIELDS) ---
         // Injecteer status en update-datum in de params
@@ -694,7 +694,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
             'val_fot_update'    => $calc_fot_update     ?? NULL,
             'val_int_modified'  => $today_datetime      ?? NULL,
         ];
-        wachthond($extdebug, 2, 'fot_data', $fot_data); 
+        wachthond($extdebug,2, 'fot_data', $fot_data); 
         intake_inject_params($params,$keys, $fot_data, "FOT");
 
 /*
@@ -706,21 +706,72 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
             // In een pre-hook voor Contact.create/update kun je vaak simpelweg dit doen:
             $params['image_URL'] = $foto_res['placeholder_url'];
             
-            wachthond($extdebug, 2, "FOT Inject Core", "image_URL gezet naar placeholder");
+            wachthond($extdebug,2, "FOT Inject Core", "image_URL gezet naar placeholder");
         }
 */
+
+/*
+        M61: FOTO IMAGE URL MOET NIET IN PARAMS WORDEN GEZET INDIEN GROUP INTAKE IS, ZORGT VOOR FALAL ERROR
+
         if ($foto_res['status'] == 0 && ($foto_res['current_url'] !== $foto_res['placeholder_url'])) {
             // Injecteer via de numerieke index om de array-structuur intact te houden
             $params[] = [
                 'column_name' => 'image_URL',
-                'value'       => $foto_res['placeholder_url']
+                'value'       => $foto_res['placeholder_url'],
+                'type'        => 'String' // <--- DIT VOORKOMT DE INVALID TYPE ERROR
             ];
-            wachthond($extdebug, 2, "FOT Inject Core", "image_URL veilig toegevoegd aan params");
+            wachthond($extdebug,2, "FOT Inject Core", "image_URL veilig toegevoegd aan params");
         }        
+*/
 
-        wachthond($extdebug, 2, "########################################################################");
-        wachthond($extdebug, 1, "### INTAKE [PRE] 3.0 CONFIGURE NAW STATUS",                "[$displayname]");
-        wachthond($extdebug, 2, "########################################################################");
+        /* M61: FOTO IMAGE URL FIX
+            We schrijven de placeholder URL direct naar het Contact record via API.
+            We voegen dit NIET toe aan $params om de 'Unknown column' Fatal Error te voorkomen.
+        */
+
+/*
+        if ($foto_res['status'] == 0 && ($foto_res['current_url'] !== $foto_res['placeholder_url'])) {
+            try {
+                civicrm_api3('Contact', 'create', [
+                    'id'        => $id,
+                    'image_URL' => $foto_res['placeholder_url'],
+                ]);
+                wachthond($extdebug,2, "FOT Core Update", "Placeholder URL direct via API op contact gezet: " . $foto_res['placeholder_url']);
+            } catch (CiviCRM_API3_Exception $e) {
+                wachthond($extdebug, 1, "FOT Core Error", "Kon placeholder niet opslaan: " . $e->getMessage());
+            }
+        }
+*/
+        if ($foto_res['status'] == 0 && ($foto_res['current_url'] !== $foto_res['placeholder_url'])) {
+            // ########################################################################
+            // ### FOT [POST] ZET PLACEHOLDER URL DIRECT OP CONTACT VIA APIV4
+            // ########################################################################
+            $params_foto_update = [
+                'checkPermissions' => FALSE,
+                'debug'            => $apidebug,
+                'where'            => [
+                    ['id', '=', $id],
+                ],
+                'values'           => [
+                    'image_URL' => $foto_res['placeholder_url'],
+                ],
+            ];
+
+            wachthond($extdebug, 7, 'params_foto_update', $params_foto_update);
+
+            try {
+                $result_foto_update = civicrm_api4('Contact', 'update', $params_foto_update);
+                wachthond($extdebug, 9, 'result_foto_update', $result_foto_update);
+                wachthond($extdebug, 2, "FOT Core Update", "Placeholder URL direct via APIv4 op contact gezet.");
+            } 
+            catch (\Exception $e) {
+                wachthond($extdebug, 1, "FOT Core Error", "Kon placeholder niet opslaan: " . $e->getMessage());
+            }
+        }
+
+        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug,1, "### INTAKE [PRE] 3.0 CONFIGURE NAW STATUS",                "[$displayname]");
+        wachthond($extdebug,2, "########################################################################");
 
         if (isset($keys['val_naw_gecheckt'])) {
             
@@ -750,11 +801,11 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
             $new_cont_nawstatus   = $naw_res['status']        ?? NULL;
 
         } else {
-            wachthond($extdebug, 4, 'NAW Inject Skip', 'Veld val_naw_gecheckt niet aanwezig in formulier.');
+            wachthond($extdebug,4, 'NAW Inject Skip', 'Veld val_naw_gecheckt niet aanwezig in formulier.');
         }
 
-        if (isset($new_part_nawgecheckt)) { wachthond($extdebug, 2, 'new_part_nawgecheckt', $new_part_nawgecheckt); }
-        if (isset($new_cont_nawstatus))   { wachthond($extdebug, 2, 'new_cont_nawstatus',   $new_cont_nawstatus);   }        
+        if (isset($new_part_nawgecheckt)) { wachthond($extdebug,2, 'new_part_nawgecheckt', $new_part_nawgecheckt); }
+        if (isset($new_cont_nawstatus))   { wachthond($extdebug,2, 'new_cont_nawstatus',   $new_cont_nawstatus);   }        
 
         wachthond($extdebug,2, "########################################################################");
         wachthond($extdebug,1, "### INTAKE [PRE] 4.0 CONFIGURE BIO STATUS",                "[$displayname]");
@@ -769,7 +820,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
                 ($val_bio_gecheckt ?? NULL), 
                 $today_datetime
             );
-            wachthond($extdebug, 2, 'bio_res', $bio_res);
+            wachthond($extdebug,2, 'bio_res', $bio_res);
 
             // 2. Data voorbereiden
             $bio_data = [
@@ -789,18 +840,18 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
 
             wachthond($extdebug,4, 'params', $params);
         } else {
-            wachthond($extdebug, 4, 'BIO Inject Skip', 'Veld val_naw_gecheckt niet aanwezig in formulier.');
+            wachthond($extdebug,4, 'BIO Inject Skip', 'Veld val_naw_gecheckt niet aanwezig in formulier.');
         }
 
-        if (isset($new_part_biogecheckt)) { wachthond($extdebug, 2, 'new_part_biogecheckt', $new_part_biogecheckt); }
-        if (isset($new_cont_biostatus))   { wachthond($extdebug, 2, 'new_cont_biostatus',   $new_cont_biostatus); }
+        if (isset($new_part_biogecheckt)) { wachthond($extdebug,2, 'new_part_biogecheckt', $new_part_biogecheckt); }
+        if (isset($new_cont_biostatus))   { wachthond($extdebug,2, 'new_cont_biostatus',   $new_cont_biostatus); }
         
         // Voer alleen uit als er een actieve deelname is gevonden ($pos_part_id_leid > 0)
         if ($pos_part_id_leid > 0) {
             
-            wachthond($extdebug,4, "########################################################################");
-            wachthond($extdebug,3, "### INTAKE - CONFIGURE - REF",                   "[VOOR PARTID $part_id]");
-            wachthond($extdebug,4, "########################################################################");
+            wachthond($extdebug,2, "########################################################################");
+            wachthond($extdebug,1, "### INTAKE - CONFIGURE - REF",                   "[VOOR PARTID $part_id]");
+            wachthond($extdebug,2, "########################################################################");
 
             $ref = intake_ref_configure($contact_id, $pos_part_id_leid, $params, $allpart_array, $part_array, $grensrefnoggoed);
 
@@ -829,9 +880,9 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
         // Voer alleen uit als er een actieve deelname is gevonden ($pos_part_id_leid > 0)
         if ($pos_part_id_leid > 0) {
             
-            wachthond($extdebug, 4, "########################################################################");
-            wachthond($extdebug, 3, "### INTAKE - CONFIGURE - VOG",                   "[VOOR PARTID $part_id]");
-            wachthond($extdebug, 4, "########################################################################");
+            wachthond($extdebug,2, "########################################################################");
+            wachthond($extdebug,1, "### INTAKE - CONFIGURE - VOG",                   "[VOOR PARTID $part_id]");
+            wachthond($extdebug,2, "########################################################################");
 
             /**
              * Let op: we geven $params mee zodat de VOG-functie direct de formulierwaarden 
@@ -839,7 +890,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
              */
 
             $vog = intake_vog_configure($contact_id, $pos_part_id_leid, $params, $allpart_array, $part_array, $context, $array_contditjaar);
-            wachthond($extdebug, 3, 'result_vog', $vog);
+            wachthond($extdebug,3, 'result_vog', $vog);
 
             $vog_data = [
                 'val_vog_nodig'     => $vog['nodig']        ?? NULL,
@@ -914,9 +965,26 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
         ];
         wachthond($extdebug,2, 'int_data', $int_data);
         intake_inject_params($params,$keys,$int_data, "INT");
-
-        wachthond($extdebug, 4, "FINAL params voor update", $params); 
     }
+
+    wachthond($extdebug,2, "########################################################################");
+    wachthond($extdebug,2, "### INTAKE [PRE] GEEF DE DEFINITIEVE WAARDEN WEER",            "[PARAMS]");
+    wachthond($extdebug,2, "########################################################################");
+
+    wachthond($extdebug,1, "initiele params bij aanvang van de module", $params_org);
+    wachthond($extdebug,4, "concept params voor drupal_timestampsweep", $params); 
+
+    // --- SWEEP VOOR DRUPAL ENTITY CONTROLLER (UNIX TIMESTAMPS) ---
+    drupal_timestamp_sweep($params);
+    wachthond($extdebug,1, "final params na drupal_timestampsweep",     $params);
+
+    // 3. Log de definitieve status
+    wachthond($extdebug, 1, "!!! DEFINITIEVE PARAMS VOOR OPSLAAN !!!", "[SAVE]");
+    CRM_Core_Error::debug_var("FINAL_PARAMS", $params);    
+
+    wachthond($extdebug,1, "########################################################################");
+    wachthond($extdebug,1, "### INTAKE [PRE] 0.X VERWERK DATA IN PROFILE INTAKE",           "[EINDE]");
+    wachthond($extdebug,1, "########################################################################");
 
     #########################################################################
     ### INTAKE PART REF [PRE]                                         [START]
@@ -924,9 +992,9 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
 
     if (in_array($groupID, $profilepartref)) {
 
-        wachthond($extdebug, 2, "########################################################################");
-        wachthond($extdebug, 1, "### INTAKE PART REF [PRE] START MODULE AANROEP", "[$displayname | GroupID: $groupID]");
-        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug,1, "### INTAKE PART REF [PRE] START MODULE AANROEP", "[$displayname | GroupID: $groupID]");
+        wachthond($extdebug,2, "########################################################################");
 
         /**
          * AANROEP NIEUWE REF FUNCTIE
@@ -948,13 +1016,13 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
             $grensrefnoggoed
         );
 
-        wachthond($extdebug, 3, "grensrefnoggoed",  $grensrefnoggoed);
+        wachthond($extdebug,3, "grensrefnoggoed",  $grensrefnoggoed);
         $ref_resultaat = intake_ref_configure($contact_id, $pos_part_id_leid, $params, $allpart_array, $part_array, $grensrefnoggoed);
-        wachthond($extdebug, 3, "### INTAKE PART REF [PRE] RESULTAAT", $ref_resultaat);
+        wachthond($extdebug,3, "### INTAKE PART REF [PRE] RESULTAAT", $ref_resultaat);
 
-        wachthond($extdebug, 2, "########################################################################");
-        wachthond($extdebug, 1, "### INTAKE PART REF [PRE] EINDE MODULE AANROEP");
-        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug,1, "### INTAKE PART REF [PRE] EINDE MODULE AANROEP");
+        wachthond($extdebug,2, "########################################################################");
     }
 
     #########################################################################
@@ -967,9 +1035,9 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
 
     if (in_array($groupID, $profilepartvog)) {
 
-        wachthond($extdebug, 2, "########################################################################");
-        wachthond($extdebug, 1, "### INTAKE PART VOG [PRE] START MODULE AANROEP", "[$displayname | GroupID: $groupID]");
-        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug,1, "### INTAKE PART VOG [PRE] START MODULE AANROEP", "[$displayname | GroupID: $groupID]");
+        wachthond($extdebug,2, "########################################################################");
 
         /**
          * AANROEP NIEUWE FUNCTIE
@@ -984,28 +1052,15 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
          */
 
         $vog_resultaat = intake_vog_configure($contact_id, $pos_part_id_leid, $params, $allpart_array, $part_array, $context);
-        wachthond($extdebug, 3, "### INTAKE PART VOG [PRE] RESULTAAT", $vog_resultaat);
+        wachthond($extdebug,3, "### INTAKE PART VOG [PRE] RESULTAAT", $vog_resultaat);
 
-        wachthond($extdebug, 2, "########################################################################");
-        wachthond($extdebug, 1, "### INTAKE PART VOG [PRE] EINDE MODULE AANROEP");
-        wachthond($extdebug, 2, "########################################################################");
+        wachthond($extdebug,2, "########################################################################");
+        wachthond($extdebug,1, "### INTAKE PART VOG [PRE] EINDE MODULE AANROEP");
+        wachthond($extdebug,2, "########################################################################");
     }
 
-    wachthond($extdebug,2, "########################################################################");
-    wachthond($extdebug,2, "### INTAKE [PRE] GEEF DE DEFINITIEVE WAARDEN WEER",            "[PARAMS]");
-    wachthond($extdebug,2, "########################################################################");
-
-    // --- SWEEP VOOR DRUPAL ENTITY CONTROLLER (UNIX TIMESTAMPS) ---
-    drupal_timestamp_sweep($params);
-
-    wachthond($extdebug,1, "params",      $params);
-
-    wachthond($extdebug,1, "########################################################################");
-    wachthond($extdebug,1, "### INTAKE [PRE] 0.X VERWERK DATA IN PROFILE INTAKE",           "[EINDE]");
-    wachthond($extdebug,1, "########################################################################");
-
     $intake_duur = number_format(microtime(TRUE) - $intake_start_tijd, 3);
-    wachthond($extdebug, 1, "### TOTALE VERWERKINGSTIJD INTAKE MODULE: " . $intake_duur . " sec");
+    wachthond($extdebug,1, "### TOTALE VERWERKINGSTIJD INTAKE MODULE: " . $intake_duur . " sec");
     wachthond($extdebug,1, "########################################################################");
 
     // --- VLAG WEER UITZETTEN ---
@@ -1019,7 +1074,7 @@ function intake_civicrm_customPre(string $op, int $groupID, int $entityID, array
 /**
  * Configureert de Intake status voor een contact (Foto, NAW, BIO).
  * Accepteert NULL voor part_id (?int).
- */
+ */ 
 function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
 
     $extdebug           = 3;
@@ -1049,6 +1104,25 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     $displayname        = $allcont_array['displayname']                             ?? NULL;
     $fiscalyear         = Civi::cache()->get('cache_today_fiscalyear_start');
 
+    // --- ANTI-GHOST OVERWRITE FIX (APIv3 VERSIE) ---
+    // base_cid2cont geeft de oude, lege datums terug direct na een form-save.
+    // We trekken de CustomValues (181) razendsnel vers uit de database om de array te repareren.
+    try {
+        $fresh_custom = civicrm_api3('CustomValue', 'get', ['entity_id' => $contact_id]);
+        $fresh_vals   = $fresh_custom['values'][$contact_id] ?? [];
+        
+        if (!empty($fresh_vals)) {
+            // ID's komen uit jouw field_map: 1497=BIO gecheckt, 1496=BIO ingevuld, 1505=NAW gecheckt, 2253=FOT update
+            if (isset($fresh_vals['1497'])) { $allcont_array['cont_biogecheckt'] = $fresh_vals['1497']; } 
+            if (isset($fresh_vals['1496'])) { $allcont_array['cont_bioingevuld'] = $fresh_vals['1496']; } 
+            if (isset($fresh_vals['1505'])) { $allcont_array['cont_nawgecheckt'] = $fresh_vals['1505']; } 
+            if (isset($fresh_vals['2253'])) { $allcont_array['cont_fotupdate']   = $fresh_vals['2253']; } 
+        }
+    } catch (Exception $e) {
+        wachthond($extdebug, 1, "CACHE BYPASS ERROR", $e->getMessage());
+    }
+    // --------------------------------
+
     wachthond($extdebug,4, 'allcont_array',     $allcont_array);
 
     wachthond($extdebug,3, "########################################################################");
@@ -1061,19 +1135,24 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     $pos_part_id_leid   = (int)($allpart_array['result_allpart_pos_leid_part_id']   ?? 0);
     wachthond($extdebug,4, 'allpart_array',     $allpart_array);
 
-    $part_rol           = $allpart_array['part_rol']                                ?? NULL;
-    $part_functie       = $allpart_array['part_functie']                            ?? NULL;
-
     wachthond($extdebug,3, 'pos_part_id',       $part_id);
     wachthond($extdebug,3, 'pos_part_id_deel',  $pos_part_id_deel);
     wachthond($extdebug,3, 'pos_part_id_leid',  $pos_part_id_leid);
+
+    $pos_part_rol       = $allpart_array['result_allpart_pos_kamprol']              ?? NULL;
+    $pos_part_functie   = $allpart_array['result_allpart_pos_kampfunctie']          ?? NULL;
+
+    wachthond($extdebug,3, 'pos_part_rol',      $pos_part_rol);
+    wachthond($extdebug,3, 'pos_part_functie',  $pos_part_functie);
 
     wachthond($extdebug,3, "########################################################################");
     wachthond($extdebug,2, "### INTAKE - 0.2 GET PID2PART",                                  "[$part_id]");
     wachthond($extdebug,3, "########################################################################");
 
     if ($part_id) {
-        $part_array    = $part_id > 0 ? base_pid2part($part_id) : [];
+        $part_array     = $part_id > 0 ? base_pid2part($part_id) : [];
+        $part_rol       = $part_array['part_rol']               ?? NULL;
+        $part_functie   = $part_array['part_functie']           ?? NULL;    
         wachthond($extdebug,4, 'result_pid2part', $part_array);
     }
 
@@ -1104,8 +1183,8 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     $grensnoggoed1      = $intake_config['noggoed1'] ?? NULL; // De 1-jaar grens
     $grensnoggoed3      = $intake_config['noggoed3'] ?? NULL; // De 3-jaar grens
 
-    wachthond($extdebug, 3, 'grensnoggoed1', $grensnoggoed1);
-    wachthond($extdebug, 3, 'grensnoggoed3', $grensnoggoed3);
+    wachthond($extdebug,3, 'grensnoggoed1', $grensnoggoed1);
+    wachthond($extdebug,3, 'grensnoggoed3', $grensnoggoed3);
 
     wachthond($extdebug,3, "########################################################################");
     wachthond($extdebug,2, "### INTAKE - 0.5 BEPAAL GRENSDATUMS REF & VOG VOOR HL & STAF");
@@ -1119,26 +1198,26 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
 
         // Scenario 1: Hoofdleiding (Streng: VOG=1jr, REF=3jr)
         if ($grensnoggoedjaar === 1) {              
-            wachthond($extdebug, 2, "LIMIT CHECK SCENARIO", "Hoofdleiding/Bestuur (1jr VOG / 3jr REF)");
+            wachthond($extdebug,2, "LIMIT CHECK SCENARIO", "Hoofdleiding/Bestuur (1jr VOG / 3jr REF)");
             
             $grensvognoggoed = $grensnoggoed1; // <--- Gebruik algemene 1-jaar grens
             $grensrefnoggoed = $grensnoggoed3; // <--- Gebruik algemene 3-jaar grens
         } 
         // Scenario 2: Overige Leiding (Standaard: VOG=3jr, REF=3jr)
         else {                                      
-            wachthond($extdebug, 2, "LIMIT CHECK SCENARIO", "Overige Leiding (3jr VOG / 3jr REF)");
+            wachthond($extdebug,2, "LIMIT CHECK SCENARIO", "Overige Leiding (3jr VOG / 3jr REF)");
             
             $grensvognoggoed = $grensnoggoed3; // <--- Gebruik algemene 3-jaar grens
             $grensrefnoggoed = $grensnoggoed3; // <--- Gebruik algemene 3-jaar grens
         }
 
         // Resultaat loggen
-        wachthond($extdebug, 3, "LIMIT CHECK ROL",   "Functie: $part_functie ($grensnoggoedjaar jr)");
-        wachthond($extdebug, 3, "LIMIT CHECK GRENS", "VOG Grens: $grensvognoggoed | REF Grens: $grensrefnoggoed");
+        wachthond($extdebug,3, "LIMIT CHECK ROL",   "Functie: $part_functie ($grensnoggoedjaar jr)");
+        wachthond($extdebug,3, "LIMIT CHECK GRENS", "VOG Grens: $grensvognoggoed | REF Grens: $grensrefnoggoed");
 
     } else {
         // Scenario 3: Geen leiding
-        wachthond($extdebug, 3, "LIMIT CHECK SKIP",  "Rol is '$part_rol' (geen leiding), check overgeslagen.");
+        wachthond($extdebug,3, "LIMIT CHECK SKIP",  "Rol is '$part_rol' (geen leiding), check overgeslagen.");
     }
 
     wachthond($extdebug,3, "########################################################################");
@@ -1162,9 +1241,9 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     wachthond($extdebug,2, "### INTAKE - 2.0 CONFIGURE - NAW",                                "[NAW]");
     wachthond($extdebug,3, "########################################################################");
 
-    $naw_gecheckt   = $allcont_array['cont_nawgecheckt'] ?? NULL;
-    $keer_leid      = $allcont_array['curcv_keer_leid']  ?? 0;
-    $register_date  = $part_array['register_date']      ?? NULL;
+    $naw_gecheckt   = $allcont_array['cont_nawgecheckt']        ?? NULL;
+    $keer_leid      = $allcont_array['curcv_keer_leid']         ?? 0;
+    $register_date  = $part_array['register_date']              ?? NULL;
 
     $naw            = intake_status_naw($contact_id, $naw_gecheckt, $keer_leid, $register_date, $today);
     wachthond($extdebug,3, 'result_naw', $naw);
@@ -1177,8 +1256,8 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     wachthond($extdebug,2, "### INTAKE - 3.0 CONFIGURE - BIO",                                "[BIO]");
     wachthond($extdebug,3, "########################################################################");
 
-    $bio_ingevuld = $allcont_array['cont_bioingevuld'] ?? NULL;
-    $bio_gecheckt = $allcont_array['cont_biogecheckt'] ?? NULL;
+    $bio_ingevuld = $allcont_array['cont_bioingevuld']          ?? NULL;
+    $bio_gecheckt = $allcont_array['cont_biogecheckt']          ?? NULL;
 
     $bio = intake_status_bio($contact_id, $bio_ingevuld, $bio_gecheckt, $today);
     wachthond($extdebug,3, 'result_bio', $bio);
@@ -1204,16 +1283,16 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     // Voer alleen uit als er een actieve deelname is gevonden ($pos_part_id_leid > 0)
     if ($pos_part_id_leid > 0) {
         
-        wachthond($extdebug, 3, "########################################################################");
-        wachthond($extdebug, 2, "### INTAKE - 5.0 CONFIGURE - VOG",               "[VOOR PARTID $part_id]");
-        wachthond($extdebug, 3, "########################################################################");
+        wachthond($extdebug,3, "########################################################################");
+        wachthond($extdebug,2, "### INTAKE - 5.0 CONFIGURE - VOG",               "[VOOR PARTID $part_id]");
+        wachthond($extdebug,3, "########################################################################");
 
         /**
          * Let op: we geven $params mee zodat de VOG-functie direct de formulierwaarden 
          * kan terugschrijven (zoals de nieuwe status of datums).
          */
         $vog = intake_vog_configure($contact_id, $pos_part_id_leid, $params, $allpart_array, $part_array, $context);
-        wachthond($extdebug, 3, 'result_vog', $vog);
+        wachthond($extdebug,3, 'result_vog', $vog);
 
         // De centrale $contact_values array bijwerken met de resultaten uit de VOG module
         $contact_values['INTAKE.VOG_nodig']     = $vog['nodig']     ?? '';
@@ -1221,9 +1300,9 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
         $contact_values['INTAKE.VOG_laatste']   = $vog['laatste']   ?? '';
     }
 
-    wachthond($extdebug, 4, "########################################################################");
-    wachthond($extdebug, 3, "### INTAKE - 6.0 CONFIGURE - INT",                                "[INT]");
-    wachthond($extdebug, 4, "########################################################################");
+    wachthond($extdebug,4, "########################################################################");
+    wachthond($extdebug,3, "### INTAKE - 6.0 CONFIGURE - INT",                                "[INT]");
+    wachthond($extdebug,4, "########################################################################");
 
     // We controleren of ALLES (&&) in orde is voor de status 'compleet'
     if (in_array(($fot['status'] ?? ''), ['geupload', 'vierkant']) 
@@ -1240,7 +1319,7 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
     $contact_values['INTAKE.INT_nodig']  = $vog['nodig'];
     $contact_values['INTAKE.INT_status'] = $new_int_status;
 
-    wachthond($extdebug, 3, "contact_values", $contact_values);
+    wachthond($extdebug,3, "contact_values", $contact_values);
 
     wachthond($extdebug,3, "########################################################################");
     wachthond($extdebug,2, "### INTAKE - 7.0 CONFIGURE - UPDATE CONTACT",             "[UPDATE CONT]");
@@ -1253,32 +1332,32 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
         'where'     => [['id', '=', $contact_id]],
     ];
 
-    wachthond($extdebug, 3, "params_get_c",         $params_get_c);
+    wachthond($extdebug,3, "params_get_c",         $params_get_c);
     $current_data_c = civicrm_api4('Contact','get', $params_get_c)->first();
-    wachthond($extdebug, 3, "current_data_c",       $current_data_c);
+    wachthond($extdebug,3, "current_data_c",       $current_data_c);
 
     $clean_values_c = [];
     $has_changes_c  = false;
 
-    wachthond($extdebug, 4, "START DIRTY CHECK LOOP", "Velden: " . count($contact_values));
+    wachthond($extdebug,4, "START DIRTY CHECK LOOP", "Velden: " . count($contact_values));
 
     foreach ($contact_values as $key => $new_val) {
         $old_val = $current_data_c[$key] ?? '';
         
         // DEBUG: Uncomment deze regel als je ÉLK veld wilt zien dat vergeleken wordt
-        wachthond($extdebug, 3, "CHECK [$key]", "Old: '$old_val' vs New: '$new_val'");
+        wachthond($extdebug,3, "CHECK [$key]", "Old: '$old_val' vs New: '$new_val'");
 
         // 1. Beide leeg? -> Skip
         if (empty($new_val) && empty($old_val)) {
             // Nuttig om te weten dat hij hier 'early exit' doet
-            wachthond($extdebug, 3, "SKIP [$key]", "Beide leeg/NULL");
+            wachthond($extdebug,3, "SKIP [$key]", "Beide leeg/NULL");
             continue;
         }
 
         // 2. Exact gelijk? -> Skip
         // Let op: Loose comparison (==), dus 0 is gelijk aan "0", maar "2023-01-01" is NIET "2023-01-01 00:00:00"
         if ($new_val == $old_val) {
-            wachthond($extdebug, 3, "SKIP [$key]", "Identiek");
+            wachthond($extdebug,3, "SKIP [$key]", "Identiek");
             continue;
         }
 
@@ -1292,7 +1371,7 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
         $len_old = strlen((string)$old_val);
         $len_new = strlen((string)$new_val);
         
-        wachthond($extdebug, 2, "CHANGE DETECTED [$key]", 
+        wachthond($extdebug,2, "CHANGE DETECTED [$key]", 
             "Old: '$old_val' ($len_old chars) -> New: '$new_val' ($len_new chars)"
         );
     }
@@ -1313,15 +1392,15 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
         ];
 
         try {
-            wachthond($extdebug, 3, 'params_contact_configure', $params_c_config);
+            wachthond($extdebug,3, 'params_contact_configure', $params_c_config);
             $result_c_config = civicrm_api4('Contact', 'update', $params_c_config);
             wachthond($extdebug, 9, 'result_contact_configure', $result_c_config);
-            wachthond($extdebug, 3, 'result_contact_configure', "EXECUTED (wijzigingen gevonden)");
+            wachthond($extdebug,3, 'result_contact_configure', "EXECUTED (wijzigingen gevonden)");
 
         } catch (\Throwable $e) {
             // FIX 2: \Throwable vangt zowel Exceptions als PHP 8 Errors (zoals de TypeError) af!
             // Hierdoor crasht het formulier NIET meer voor de gebruiker als er een data-mismatch is.
-            wachthond($extdebug, 1, "FOUT/TYPE ERROR genegeerd tijdens Contact update: " . $e->getMessage(), $clean_values_c);
+            wachthond($extdebug,1, "FOUT/TYPE ERROR genegeerd tijdens Contact update: " . $e->getMessage(), $clean_values_c);
         }
     }    
 
@@ -1396,10 +1475,10 @@ function intake_civicrm_configure(int $contact_id, ?int $part_id = 0): array {
                 wachthond($extdebug,9, 'result_participant_configure', $result_p_config);
                 wachthond($extdebug,1, 'result_participant_configure', "EXECUTED (Wijzigingen gevonden)");
             } catch (\Exception $e) {
-                wachthond($extdebug, 1, "Fout configure participant: ".$e->getMessage());
+                wachthond($extdebug,1, "Fout configure participant: ".$e->getMessage());
             }
         } else {
-            wachthond($extdebug, 3, 'result_participant_configure', "SKIPPED (Geen wijzigingen)");
+            wachthond($extdebug,3, 'result_participant_configure', "SKIPPED (Geen wijzigingen)");
         }
     }
 

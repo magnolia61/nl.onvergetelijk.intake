@@ -26,7 +26,7 @@ function intake_recursion_lock($set = null) {
  */
 function intake_inject_params(&$params, $keys, $data, $label = "DATA",) {
 
-    $extdebug = 0;
+    $extdebug = 3;
     
     foreach ($data as $varKey => $newValue) {
         
@@ -151,7 +151,7 @@ function intake_status_bio($contact_id, $ingevuld, $gecheckt, $today) {
  */
 function intake_check_nodig($part_array, $allpart_array, $intake_array) {
     
-    $extdebug       = 3; // Zet op 1 of 2 voor uitgebreide debugging
+    $extdebug       = 0; // Zet op 1 of 2 voor uitgebreide debugging
     $today_datetime = date("Y-m-d H:i:s");
 
     $type           = $intake_array['type']             ?? 'ONBEKEND'; 

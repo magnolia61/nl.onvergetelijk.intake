@@ -20,7 +20,7 @@
 
 function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_array = [], $part_array = [], $grensrefnoggoed = NULL) {
 
-    $extdebug   = 0; // 1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug   = 3; // 1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug   = FALSE; 
     $today      = date('Y-m-d');
     
@@ -51,7 +51,7 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
     }
     
     // Debug de belangrijkste beslis-variabelen
-    wachthond($extdebug,4, "Allpart: Pos Leid Part ID", $allpart_array['ditjaar_pos_leid_part_id'] ?? 'NULL');
+    wachthond($extdebug,4, "Allpart: Pos Leid Part ID", $allpart_array['ditjaar_pos_leid_part_id']   ?? 'NULL');
     wachthond($extdebug,4, "Allpart: Status ID",        $allpart_array['ditjaar_one_leid_status_id'] ?? 'NULL');
 
     // -------------------------------------------------------------------------
@@ -154,7 +154,8 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
             'id',
             'contact_id',
             'contact_id.display_name',
-            'contact_id.INTAKE.REF_laatste',      
+            'contact_id.INTAKE.REF_persoon',
+            'contact_id.INTAKE.REF_laatste',
             'PART.PART_kampstart',
             'PART.PART_kampkort',
             'PART.PART_kampfunctie',
@@ -186,6 +187,7 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
         $kampkort         = $r['PART.PART_kampkort']                   ?? NULL;
         $kampfunctie      = $r['PART.PART_kampfunctie']                ?? NULL;
 
+        $cont_refpersoon  = $r['contact_id.INTAKE.REF_persoon']        ?? NULL;
         $cont_reflaatste  = $r['contact_id.INTAKE.REF_laatste']        ?? NULL;
         
         $part_refpersoon  = $r['PART_LEID_REF.REF_persoon']            ?? NULL;
@@ -195,9 +197,13 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
         $part_refcid      = $r['PART_LEID_REFERENTIE.referentie_cid']  ?? NULL;
         $part_refnaam     = $r['PART_LEID_REFERENTIE.referentie_naam'] ?? NULL;
 
-        wachthond($extdebug,1, 'Huidige Data Displayname', $displayname);
-        wachthond($extdebug,2, 'Huidige DB Ref Persoon',   $part_refpersoon);
-        wachthond($extdebug,2, 'Huidige DB Ref Feedback',  $part_reffeedback);
+        wachthond($extdebug,1, 'Huidige Displayname',       $displayname);
+
+        wachthond($extdebug,2, 'Huidige cont_refpersoon',   $cont_refpersoon);
+        wachthond($extdebug,2, 'Huidige cont_reflaatste',   $cont_reflaatste);
+
+        wachthond($extdebug,2, 'Huidige part_refpersoon',   $part_refpersoon);
+        wachthond($extdebug,2, 'Huidige part_reffeedback',  $part_reffeedback);
     } else {
         wachthond($extdebug,1, "FOUT: Geen participant data gevonden voor ID $part_id (Script stopt)");
         return; 
@@ -263,13 +269,14 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
         'val_part_refpersoon'  => $val_part_refpersoon,
         'val_part_refgevraagd' => $val_part_refgevraagd,
         'val_part_reffeedback' => $val_part_reffeedback,
+        'cont_ref_persoon'     => $cont_refpersoon,
         'cont_ref_laatste'     => $cont_reflaatste,
         'part_ref_persoon'     => $part_refpersoon,
         'part_ref_gevraagd'    => $part_refgevraagd,
         'part_ref_feedback'    => $part_reffeedback,
     ];
 
-    wachthond($extdebug,4, "Input voor Consolidate", $array_intake_refall);
+    wachthond($extdebug,3, "Input voor Consolidate", $array_intake_refall);
     
     // De consolidate helper functie doet het zware werk van vergelijken
     $refdata_array      = intake_consolidate_refdata($part_array, $allpart_array, $array_intake_refall, $params);
@@ -382,27 +389,35 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
     wachthond($extdebug,1, "### INTAKE REF CONFIG 7.0 BEPAAL STATUSSEN", "[$displayname]");
     wachthond($extdebug,1, "########################################################################");
 
-    // A. Ref Persoon Status
-    $intake_status_refpersoon_array  = intake_status_refpersoon($contact_id, $part_array, $refdata_array, $new_cont_refnodig, $groupID);
-    wachthond($extdebug,3, "Status Array (Persoon)", $intake_status_refpersoon_array);
-    
-    $new_refpersoon_actdatum         = $intake_status_refpersoon_array['new_refpersoon_actdatum'];
-    $new_refpersoon_actstatus        = $intake_status_refpersoon_array['new_refpersoon_actstatus'];
-    $new_refpersoon_actprio          = $intake_status_refpersoon_array['new_refpersoon_actprio'];
+//  $intake_status_refpersoon_array  = intake_status_refpersoon($contact_id, $part_array, $refdata_array, $new_cont_refnodig, $groupID);
+//  $intake_status_reffeedback_array = intake_status_reffeedback($contact_id, $part_array, $refdata_array, $new_cont_refnodig, $groupID);
 
-    // B. Ref Feedback Status
-    $intake_status_reffeedback_array = intake_status_reffeedback($contact_id, $part_array, $refdata_array, $new_cont_refnodig, $groupID);
-    wachthond($extdebug,3, "Status Array (Feedback)", $intake_status_reffeedback_array);
-    
-    $new_reffeedback_actdatum        = $intake_status_reffeedback_array['new_reffeedback_actdatum'];
-    $new_reffeedback_actstatus       = $intake_status_reffeedback_array['new_reffeedback_actstatus'];
-    $new_reffeedback_actprio         = $intake_status_reffeedback_array['new_reffeedback_actprio'];
+    // --- A. Bepaal status van de Referent-persoon ---
+    $refpersoon_array    = intake_status_refpersoon($contact_id, $part_array, $refdata_array, $refnodig, $groupID);
+    wachthond($extdebug,1, "refpersoon_array",    $refpersoon_array);
 
-    // Eindstatus bepalen (samenvatting van het geheel)
-    $new_cont_refstatus = $intake_status_reffeedback_array['new_cont_refstatus'];
-    $new_part_refstatus = $intake_status_reffeedback_array['new_part_refstatus'];
-    
-    wachthond($extdebug,1, "Eindstatus Ref", $new_cont_refstatus);
+    // Update de array direct voor de volgende stappen
+    $refdata_array['status_persoon']            = $refpersoon_array['new_cont_refstatus'];
+    $refdata_array['new_refpersoon_actstatus']  = $refpersoon_array['new_refpersoon_actstatus'];
+
+
+    // --- B. Bepaal status van de Feedback ---
+    $reffeedback_array   = intake_status_reffeedback($contact_id, $part_array, $refdata_array, $refnodig, $groupID);
+    wachthond($extdebug,1, "reffeedback_array",   $reffeedback_array);
+
+    // Update de array opnieuw
+    $refdata_array['status_feedback']           = $reffeedback_array['new_cont_refstatus'];
+    $refdata_array['new_reffeed_actstatus']     = $reffeedback_array['new_reffeed_actstatus'];
+
+    // --- C. Bepaal nu de ALGEMENE status op basis van de verzamelde data ---
+    $algemene_status = intake_status_ref_algemeen($contact_id, $part_array, $refdata_array, $refnodig);
+
+    // Zet deze status nu door naar de uiteindelijke resultaten
+    $refdata_array['new_cont_refstatus']        = $algemene_status;
+    $refdata_array['new_part_refstatus']        = $algemene_status;
+
+    wachthond($extdebug,1, "fin_cont_refstatus", $new_cont_refstatus);
+    wachthond($extdebug,1, "fin_part_refstatus", $new_part_refstatus);
 
     // -------------------------------------------------------------------------
     // Stap 8: CiviCRM Activiteiten (Taken)
@@ -535,7 +550,7 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
             'values'           => $clean_values,
         ];
 
-        wachthond($extdebug, 2, 'Params voor Contact Update', $params_cont_update);
+        wachthond($extdebug, 3, 'Params voor Contact Update', $params_cont_update);
         
         try {
             // Gebruik de 'update' actie zonder 'reload' als dat niet strikt nodig is voor de flow
@@ -629,12 +644,12 @@ function intake_ref_configure($contact_id, $part_id, &$params = [], $allpart_arr
  */
 function intake_consolidate_refdata($part_array, $allpart_array, $intake_array, $params = []) {
 
-    $extdebug       = 0;  // 1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug       = 3;  // 1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug       = FALSE;
     $today_datetime = date("Y-m-d H:i:s");    
 
     wachthond($extdebug, 2, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 0. EXTRACTIE FORMULIER",      "[PARAMS]");
+    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 0. EXTRACTIE FORMULIER",          "[PARAMS]");
     wachthond($extdebug, 2, "########################################################################");
 
     // Configuratie: Welke velden in de $params (formulier) zoeken we?
@@ -668,47 +683,53 @@ function intake_consolidate_refdata($part_array, $allpart_array, $intake_array, 
     wachthond($extdebug, 3, "Stap 0: Resultaat extractie formulier", $extracted);
 
     wachthond($extdebug, 2, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 1.1 BASIS DATA EVENT",        "[LOAD_BASE]");
+    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 1.1 BASIS DATA EVENT",         "[LOAD_BASE]");
     wachthond($extdebug, 2, "########################################################################");
 
-    $displayname    = $part_array['displayname']    ?? NULL;
-    $part_kampkort  = $part_array['part_kampkort']  ?? NULL;
-    $part_kampstart = $part_array['part_kampstart'] ?? NULL; // Cruciaal voor fiscale check
-    $contact_id     = $part_array['contact_id']     ?? 0;
+    wachthond($extdebug, 3, "part_array",       $part_array);
+
+    $displayname        = $part_array['displayname']        ?? NULL;
+    $part_kampkort      = $part_array['part_kampkort']      ?? NULL;
+    $part_kampstart     = $part_array['part_kampstart']     ?? NULL; // Cruciaal voor fiscale check
+    $contact_id         = $part_array['contact_id']         ?? 0;
 
     wachthond($extdebug, 2, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 1.2 HUIDIGE CONTACT DATA",   "[LOAD_CONT]");
+    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 1.2 HUIDIGE CONTACT DATA",     "[LOAD_CONT]");
     wachthond($extdebug, 2, "########################################################################");
+
+    wachthond($extdebug, 3, "intake_array",     $intake_array);
 
     // Dit is de "Global State" van het contact (meestal uit cid2cont)
     // We focussen hier op de 'Laatste' velden, want Referenties zijn vaak jaaroverschrijdend relevant.
-    $cont_ref_laatste = $intake_array['cont_reflaatste']  ?? NULL;
-    $cont_ref_naam    = $intake_array['cont_refnaam']     ?? NULL;
-    $cont_ref_cid     = $intake_array['cont_ref_cid']     ?? NULL;
-    $cont_ref_bezwaar = $intake_array['cont_ref_bezwaar'] ?? 'Geen'; // Default op 'Geen'
+    $cont_ref_persoon   = $intake_array['cont_ref_persoon'] ?? NULL;
+    $cont_ref_laatste   = $intake_array['cont_ref_laatste'] ?? NULL;
+    $cont_ref_naam      = $intake_array['cont_ref_naam']    ?? NULL;
+    $cont_ref_cid       = $intake_array['cont_ref_cid']     ?? NULL;
+    $cont_ref_bezwaar   = $intake_array['cont_ref_bezwaar'] ?? 'Geen'; // Default op 'Geen'
 
     wachthond($extdebug, 3, "Huidige Global Contact Status", [
-        'Laatste datum' => $cont_ref_laatste,
-        'Naam referent' => $cont_ref_naam,
-        'Bezwaar'       => $cont_ref_bezwaar
+        'cont_ref_persoon'  => $cont_ref_persoon,
+        'cont_ref_laatste'  => $cont_ref_laatste,
+        'cont_ref_naam'     => $cont_ref_naam,
+        'cont_ref_bezwaar'  => $cont_ref_bezwaar
     ]);
 
     wachthond($extdebug, 2, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 1.3 HUIDIGE DEELNEMER DATA", "[LOAD_PART]");
+    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 1.3 HUIDIGE DEELNEMER DATA",   "[LOAD_PART]");
     wachthond($extdebug, 2, "########################################################################");
 
     // Dit is de status van dit specifieke evenement-record (kan leeg zijn of oud)
-    $part_ref_persoon  = $part_array['part_refpersoon']  ?? NULL;
-    $part_ref_verzoek  = $part_array['part_refverzoek']  ?? NULL;
-    $part_ref_feedback = $part_array['part_reffeedback'] ?? NULL;
+    $part_ref_persoon   = $part_array['part_refpersoon']    ?? NULL;
+    $part_ref_verzoek   = $part_array['part_refverzoek']    ?? NULL;
+    $part_ref_feedback  = $part_array['part_reffeedback']   ?? NULL;
 
     wachthond($extdebug, 3, "Huidige Participant Status", [
-        'Persoon opgegeven' => $part_ref_persoon,
-        'Feedback datum'    => $part_ref_feedback
+        'part_ref_persoon'  => $part_ref_persoon,
+        'part_ref_feedback' => $part_ref_feedback
     ]);
 
     wachthond($extdebug, 2, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 1.4 HISTORIE OPHALEN (DB)",  "[LOAD_HIST]");
+    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 1.4 HISTORIE OPHALEN (DB)",    "[LOAD_HIST]");
     wachthond($extdebug, 2, "########################################################################");
 
     // Initialiseer variabelen voor de historie
@@ -752,7 +773,7 @@ function intake_consolidate_refdata($part_array, $allpart_array, $intake_array, 
         $tmp_winner_cid      = $params['referentie_cid']     ?? $rel_cid;
         $tmp_winner_bezwaar  = $params['referentie_bezwaar'] ?? $rel_bezwaar;
         
-        wachthond($extdebug, 2, "Winnaar = FORMULIER", "Datum: $tmp_winner_feedback");
+        wachthond($extdebug, 2, "Winnaar Feedback = FORMULIER",         "Datum: $tmp_winner_feedback");
     } else {
         // Database historie is nieuwer of gelijk aan formulier
         $tmp_winner_feedback = $rel_laatste_datum;
@@ -760,11 +781,11 @@ function intake_consolidate_refdata($part_array, $allpart_array, $intake_array, 
         $tmp_winner_cid      = $rel_cid;
         $tmp_winner_bezwaar  = $rel_bezwaar;
         
-        wachthond($extdebug, 2, "Winnaar = DATABASE HISTORIE", "Datum: $tmp_winner_feedback");
+        wachthond($extdebug, 2, "Winnaar Feedback = DATABASE HISTORIE", "Datum: $tmp_winner_feedback");
     }
 
     wachthond($extdebug, 2, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 2.2 DEELNEMER SYNC",          "[REF_PART_SYNC]");
+    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 2.2 PART SYNC",            "[REF_PART_SYNC]");
     wachthond($extdebug, 2, "########################################################################");
 
     // STAP B: Update de specifieke event-data (Participant)
@@ -773,12 +794,17 @@ function intake_consolidate_refdata($part_array, $allpart_array, $intake_array, 
     // Simpele logica: Als formulier data heeft die nieuwer is dan wat er stond -> Update.
     if (date_bigger($extracted['val_ref_persoon'], $part_ref_persoon)) {
         $part_ref_persoon = $extracted['val_ref_persoon'];
-        wachthond($extdebug, 2, "PART UPDATE: Datum Persoon Door gegeven", $part_ref_persoon);
+        wachthond($extdebug, 2, "PART UPDATE: Datum Persoon doorgegeven", $part_ref_persoon);
+    }
+
+    if (date_bigger($part_ref_persoon, $cont_ref_persoon)) {
+        $cont_ref_persoon = $part_ref_persoon;
+        wachthond($extdebug, 2, "CONT UPDATE: Datum Persoon doorgegeven", $cont_ref_persoon);
     }
     
     if (date_bigger($extracted['val_ref_verzoek'], $part_ref_verzoek)) {
         $part_ref_verzoek = $extracted['val_ref_verzoek'];
-        wachthond($extdebug, 2, "PART UPDATE: Datum Verzoek Verstuurd", $part_ref_verzoek);
+        wachthond($extdebug, 2, "PART UPDATE: Datum Verzoek verstuurd", $part_ref_verzoek);
     }
 
     // B.2: Feedback Datum (CRUCIAAL: Fiscale Check)
@@ -796,11 +822,11 @@ function intake_consolidate_refdata($part_array, $allpart_array, $intake_array, 
             wachthond($extdebug, 2, "PART SKIP: Bestaande datum was al nieuwer/gelijk.");
         }
     } else {
-        wachthond($extdebug, 2, "PART SKIP: Datum ($tmp_winner_feedback) valt buiten fiscaal jaar kamp ($part_kampstart).");
+        wachthond($extdebug, 2, "PART SKIP: Datum ($tmp_winner_feedback) valt buiten fiscaal jaar kamp ($part_kampstart)");
     }
 
     wachthond($extdebug, 2, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 2.3 CONTACT SYNC",            "[REF_CONT_SYNC]");
+    wachthond($extdebug, 1, "### INTAKE CONSOLIDATE [REF] 2.3 CONTACT SYNC",         "[REF_CONT_SYNC]");
     wachthond($extdebug, 2, "########################################################################");
 
     // STAP C: Update de globale contact data (Contact)
@@ -837,6 +863,8 @@ function intake_consolidate_refdata($part_array, $allpart_array, $intake_array, 
         'val_ref_feedback'    => $extracted['val_ref_feedback'],
 
         // 2. Wat is nu de Globale Contact Status?
+        'cont_ref_persoon'    => $cont_ref_persoon,
+
         'cont_ref_laatste'    => $cont_ref_laatste,
         'cont_ref_naam'       => $cont_ref_naam,
         'cont_ref_cid'        => $cont_ref_cid,

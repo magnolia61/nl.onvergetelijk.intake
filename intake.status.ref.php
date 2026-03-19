@@ -2,294 +2,73 @@
 
 function intake_status_refpersoon($contact_id, $part_array, $refdata_array, $refnodig, $groupID) {
 
-    $extdebug       = 0;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
-    $apidebug       = FALSE;
+    $extdebug       = 3; 
     $today_datetime = date("Y-m-d H:i:s");
-    $grensref       = date("Y-m-d", strtotime("-3 years")); 
 
-    // Initialisatie van variabelen
-    $ref_status             = $ref_laatste = $ref_persoon = $ref_verzoek = $ref_datum = NULL;
-    $new_cont_refstatus     = $new_part_refstatus = 'onbekend';
-    $referentie_array       = [];
+    // Initialisatie
+    $displayname                = $part_array['displayname']            ?? NULL;
+    $ditevent_part_kampkort     = $part_array['part_kampkort']          ?? NULL;
 
-    $displayname            = $part_array['displayname']    ?? NULL;
-    $ditevent_part_kampkort = $part_array['part_kampkort']  ?? NULL;
-
-    if (empty($contact_id)) {
-        return NULL;
-    }
+    if (empty($contact_id)) { return NULL; }
 
     wachthond($extdebug, 1, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE STATUS - REF PERSOON VOOR $displayname", "[$ditevent_part_kampkort]");
+    wachthond($extdebug, 1, "### INTAKE STATUS - REF PERSOON VOOR $displayname",   "[$ditevent_part_kampkort]");
     wachthond($extdebug, 1, "########################################################################");
 
-    // Mapping vanuit part_array
-    $ditevent_part_id           = $part_array['id']                               ?? NULL;
-    $ditevent_part_eventid      = $part_array['part_event_id']                    ?? NULL;
-    $ditevent_part_status_id    = $part_array['status_id']                        ?? NULL;
-    $ditevent_part_functie      = $part_array['part_functie']                     ?? NULL;
-    $ditevent_part_rol          = $part_array['part_rol']                         ?? NULL;
-    $ditevent_part_kampnaam     = $part_array['part_kampnaam']                    ?? NULL;
-    $ditevent_part_kampstart    = $part_array['part_kampstart']                   ?? NULL;
-    $ditevent_part_kampeinde    = $part_array['part_kampeinde']                   ?? NULL;
-    $vog_verzoek                = $part_array['part_vogverzoek']                  ?? NULL;
+    // Mapping data
+    $ditevent_part_id           = $part_array['id']                     ?? NULL;
+    $ditevent_part_eventid      = $part_array['part_event_id']          ?? NULL;
+    $ditevent_part_kampnaam     = $part_array['part_kampnaam']          ?? NULL;
+    $ditevent_part_kampstart    = $part_array['part_kampstart']         ?? NULL;
+    $ditevent_part_kampeinde    = $part_array['part_kampeinde']         ?? NULL;
+    $ditevent_part_rol          = $part_array['part_rol']               ?? NULL;
+    $ditevent_part_functie      = $part_array['part_functie']           ?? NULL;
+    
+    $part_refpersoon            = $part_array['part_refpersoon']        ?? NULL;
+    $cont_refpersoon            = $refdata_array['new_cont_refpersoon'] ?? NULL;
+    $vog_verzoek                = $part_array['part_vogverzoek']        ?? NULL;
 
-    // Mapping vanuit refdata_array
-    if (!empty($refdata_array)) {
-        $ref_status             = $refdata_array['new_cont_refstatus']            ?? NULL;
-        $ref_laatste            = $refdata_array['new_cont_reflaatste']           ?? NULL;
-        $ref_persoon            = $refdata_array['new_cont_refpersoon']           ?? NULL;
-        $ref_verzoek            = $refdata_array['new_cont_refverzoek']           ?? NULL;
-        $ref_datum              = $refdata_array['new_cont_refdatum']             ?? NULL;
-    }
+    // Bepaal meest recente datum
+    $meest_recente_refpersoon   = (date_bigger($part_refpersoon, $cont_refpersoon)) ? $part_refpersoon : $cont_refpersoon;
+    
+    // Fiscale checks
+    $refpersoon_infiscal_nu     = infiscalyear($meest_recente_refpersoon, $today_datetime)          ?? 0;
+    $refpersoon_infiscal_event  = infiscalyear($meest_recente_refpersoon, $ditevent_part_kampstart) ?? 0;
 
+    // Defaults
     $new_refpersoon_actstatus   = 'Scheduled';
-    $new_refpersoon_actprio     = 'Normaal';
+    $new_cont_refstatus         = 'onbekend';
 
-    // Fiscal year checks
-    $refpersoon_infiscal_event  = infiscalyear($ref_persoon, $ditevent_part_kampstart) ?? 0;
-    $refdatum_infiscal_nu       = infiscalyear($ref_datum, $today_datetime)            ?? 0;
-    $refpersoon_infiscal_nu     = infiscalyear($ref_persoon, $today_datetime)          ?? 0;
-    $reflaatste_infiscal_nu     = infiscalyear($ref_laatste, $today_datetime)          ?? 0;
-
-    // Bepaal basis status op basis van laatste referentie
-    if ($reflaatste_infiscal_nu == 1) {
-        $new_cont_refstatus = 'ontvangen';
-    } elseif (date_biggerequal($ref_laatste, $grensref)) {
-        $new_cont_refstatus = 'noggoed';
-    } else {
-        $new_cont_refstatus = 'onbekend';
-    }
-
-    // Verfijning op basis van huidige intake
-    if ($refnodig == "noggoed") {
+    // =========================================================================
+    // LOGICA VOOR ACTIVITEIT: REF PERSOON DOORGEVEN
+    // =========================================================================
+    if ($refpersoon_infiscal_nu == 1 || $refpersoon_infiscal_event == 1) {
+        $new_cont_refstatus       = 'vragen'; 
+        $new_refpersoon_actstatus = 'Completed';
+    } 
+    elseif ($refnodig == "noggoed") {
         $new_cont_refstatus       = 'noggoed';
         $new_refpersoon_actstatus = 'Not Required';
-    } else {
-        $dayssince_vogverzoek = 0;
-        if ($vog_verzoek) {
-            $diff = date_diff(date_create($vog_verzoek), date_create($today_datetime));
-            $dayssince_vogverzoek = (int)$diff->format('%r%a'); 
-        }
-
-        if ($refdatum_infiscal_nu == 1) {
-            $new_cont_refstatus       = 'ontvangen';
-            $new_refpersoon_actstatus = 'Completed';
-        } elseif ($refpersoon_infiscal_nu == 1) {
-            $new_cont_refstatus       = 'vragen';
-            $new_refpersoon_actstatus = 'Completed';
-        } elseif (date_bigger($today_datetime, $ditevent_part_kampeinde)) {
-            $new_cont_refstatus       = 'verlopen';
-            $new_refpersoon_actstatus = 'Failed';
-        } elseif ($refpersoon_infiscal_event == 1 || $vog_verzoek) {
-            if ($dayssince_vogverzoek < 7)      { $new_refpersoon_actstatus = "Pending"; }
-            elseif ($dayssince_vogverzoek < 21) { $new_refpersoon_actstatus = "Left Message"; }
-            elseif ($dayssince_vogverzoek < 30) { $new_refpersoon_actstatus = "Unreachable"; }
-            else                                { $new_refpersoon_actstatus = "No_show"; }
-            
-            if ($dayssince_vogverzoek >= 270)   { $new_refpersoon_actstatus = "Bounced"; }
-        }
+    }
+    elseif (date_bigger($today_datetime, $ditevent_part_kampeinde)) {
+        $new_cont_refstatus       = 'verlopen';
+        $new_refpersoon_actstatus = 'Failed';
+    }
+    elseif ($vog_verzoek) {
+        $diff = date_diff(date_create($vog_verzoek), date_create($today_datetime));
+        $days = (int)$diff->format('%r%a'); 
+        
+        if ($days < 7)       { $new_refpersoon_actstatus = "Pending"; }
+        elseif ($days < 21)  { $new_refpersoon_actstatus = "Left Message"; }
+        elseif ($days < 30)  { $new_refpersoon_actstatus = "Unreachable"; }
+        else                 { $new_refpersoon_actstatus = "No_show"; }
     }
 
-    // Prioriteit toewijzen
-    $prio_map = [
-        'Pending'      => 'Laag',
-        'Left Message' => 'Normaal',
-        'Unreachable'  => 'Urgent',
-        'No_show'      => 'Urgent',
-        'Bounced'      => 'Urgent'
-    ];
+    $prio_map = ['Pending' => 'Laag', 'Left Message' => 'Normaal', 'Unreachable' => 'Urgent', 'No_show' => 'Urgent'];
     $new_refpersoon_actprio = $prio_map[$new_refpersoon_actstatus] ?? 'Normaal';
+    $new_refpersoon_actdatum = $meest_recente_refpersoon ?: $ditevent_part_kampstart;
 
-    // Check op negatieve deelnamestatus (reset)
-    $status_data     = find_partstatus();
-    $status_negative = $status_data['ids']['Negative'] ?? [];
-
-    if (in_array($ditevent_part_status_id, $status_negative)) {
-        $new_cont_refstatus       = "onbekend";
-        $new_part_refstatus       = "onbekend";
-        $new_refpersoon_actstatus = 'Not Required';
-    }
-
-    // Bepaal de datum voor de activiteit
-    if ($refpersoon_infiscal_event == 1) {
-        $new_refpersoon_actdatum = $ref_persoon;
-    } elseif ($vog_verzoek) {
-        $new_refpersoon_actdatum = date('Y-m-d H:i:s', strtotime($vog_verzoek . ' +30 days'));
-    } else {
-        $new_refpersoon_actdatum = $ditevent_part_kampstart;
-    }
-
-    // Deelname status matchen aan contact status indien in dit jaar
-    if (infiscalyear($ditevent_part_kampstart, $today_datetime) == 1) {
-        $new_part_refstatus = $new_cont_refstatus;
-    }
-
-    // Voorbereiden van de return array
-    $status_refpersoon_array = [
-        'displayname'                      => $displayname,
-        'contact_id'                       => $contact_id,
-        'part_id'                          => $ditevent_part_id,
-        'event_id'                         => $ditevent_part_eventid,
-        'kamp_naam'                        => $ditevent_part_kampnaam,
-        'kamp_start'                       => $ditevent_part_kampstart,
-        'kamp_rol'                         => $ditevent_part_rol,
-        'kamp_functie'                     => $ditevent_part_functie,
-        'new_cont_refstatus'               => $new_cont_refstatus,
-        'new_part_refstatus'               => $new_part_refstatus,
-        'activity_type_naam'               => 'REF_persoon',
-        'new_refpersoon_actdatum'          => $new_refpersoon_actdatum,
-        'new_refpersoon_actstatus'         => $new_refpersoon_actstatus,
-        'new_refpersoon_actprio'           => $new_refpersoon_actprio,
-    ];
-
-    return $status_refpersoon_array;
-}
-
-/**
- * BEPAAL STATUS REF FEEDBACK
- */
-function intake_status_reffeedback($contact_id, $part_array, $refdata_array, $refnodig, $groupID, $allpart_array = NULL) {
-
-    $extdebug       = 0;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
-    $apidebug       = FALSE;
-    $today_datetime = date("Y-m-d H:i:s");
-    $grensref       = date("Y-m-d", strtotime("-3 years")); 
-
-    // Initialisatie van variabelen om notices te voorkomen
-    $ref_status = $ref_laatste = $ref_persoon = $ref_verzoek = $ref_datum = NULL;
-    $new_cont_refstatus = $new_part_refstatus = 'onbekend';
-    $new_reffeedback_actstatus = 'Scheduled';
-    $new_reffeedback_actprio   = 'Normaal';
-
-    $displayname            = $part_array['displayname']   ?? NULL;
-    $ditevent_part_kampkort = $part_array['part_kampkort']  ?? NULL;
-
-    if (empty($contact_id)) {
-        return NULL;
-    }
-
-    wachthond($extdebug, 1, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE STATUS - BEPAAL STATUS REF FEEDBACK VOOR $displayname [$ditevent_part_kampkort]", "[START]");
-    wachthond($extdebug, 1, "########################################################################");
-
-    // Mapping vanuit allpart_array (Negatieve status check)
-    $ditjaar_one_leid_status_id = $allpart_array['result_allpart_one_leid_status_id'] ?? NULL;
-
-    // Mapping vanuit part_array
-    $ditevent_part_regdate     = $part_array['register_date']                    ?? NULL;
-    $ditevent_part_id          = $part_array['id']                               ?? NULL;
-    $ditevent_part_eventid     = $part_array['part_event_id']                    ?? NULL;
-    $ditevent_part_functie     = $part_array['part_functie']                     ?? NULL;
-    $ditevent_part_rol         = $part_array['part_rol']                         ?? NULL;
-    $ditevent_part_kampnaam    = $part_array['part_kampnaam']                    ?? NULL;
-    $ditevent_part_kampstart   = $part_array['part_kampstart']                   ?? NULL;
-    $ditevent_part_kampeinde   = $part_array['part_kampeinde']                   ?? NULL;
-
-    // Mapping vanuit refdata_array
-    if (!empty($refdata_array)) {
-        $ref_status            = $refdata_array['new_cont_refstatus']             ?? NULL;
-        $ref_laatste           = $refdata_array['new_cont_reflaatste']            ?? NULL;
-        $ref_persoon           = $refdata_array['new_cont_refpersoon']            ?? NULL;
-        $ref_verzoek           = $refdata_array['new_cont_refverzoek']            ?? NULL;
-        $ref_datum             = $refdata_array['new_cont_refdatum']              ?? NULL;
-    }
-
-    // Fiscal year checks
-    $refverzoek_infiscal_event = infiscalyear($ref_verzoek, $ditevent_part_kampstart) ?? 0;
-    $refdatum_infiscal_nu      = infiscalyear($ref_datum, $today_datetime)            ?? 0;
-    $refpersoon_infiscal_nu    = infiscalyear($ref_persoon, $today_datetime)          ?? 0;
-    $reflaatste_infiscal_nu    = infiscalyear($ref_laatste, $today_datetime)          ?? 0;
-
-    // Bepaal basis status op basis van laatste referentie (historie)
-    if ($reflaatste_infiscal_nu == 1) {
-        $new_cont_refstatus = 'ontvangen';
-    } elseif (date_biggerequal($ref_laatste, $grensref)) {
-        $new_cont_refstatus = 'noggoed';
-    } else {
-        $new_cont_refstatus = 'onbekend';
-    }
-
-    // Verfijning logica op basis van huidige intake-behoefte
-    if ($refnodig == "noggoed") {
-        $new_cont_refstatus        = 'noggoed';
-        $new_reffeedback_actstatus = 'Not Required';
-    } else {
-        $dayssince_refverzoek = 0;
-        if ($ref_verzoek) {
-            $diff = date_diff(date_create($ref_verzoek), date_create($today_datetime));
-            $dayssince_refverzoek = (int)$diff->format('%r%a'); 
-        }
-
-        if ($refdatum_infiscal_nu == 1) {
-            $new_cont_refstatus        = 'ontvangen';
-            $new_reffeedback_actstatus = 'Completed';
-        } elseif ($refpersoon_infiscal_nu != 1) {
-            $new_cont_refstatus        = 'onbekend';
-            $new_reffeedback_actstatus = 'Scheduled';
-        } elseif (date_bigger($today_datetime, $ditevent_part_kampeinde)) {
-            $new_cont_refstatus        = 'verlopen';
-            $new_reffeedback_actstatus = 'Failed';
-        } elseif ($refverzoek_infiscal_event == 1) {
-            $new_cont_refstatus        = 'gevraagd';
-            if ($dayssince_refverzoek < 7)         { $new_reffeedback_actstatus = "Pending"; }
-            elseif ($dayssince_refverzoek < 21)    { $new_reffeedback_actstatus = "Left Message"; }
-            elseif ($dayssince_refverzoek < 30)    { $new_reffeedback_actstatus = "Unreachable"; }
-            else                                   { $new_reffeedback_actstatus = "No_show"; }
-            
-            if ($dayssince_refverzoek >= 270)      { $new_reffeedback_actstatus = "Bounced"; }
-        } elseif ($refpersoon_infiscal_nu == 1) {
-            $new_cont_refstatus        = 'vragen';
-            $new_reffeedback_actstatus = 'Scheduled';
-        }
-    }
-
-    // Prioriteit via map voor rustige code
-    $prio_map = [
-        'Pending'      => 'Laag',
-        'Left Message' => 'Normaal',
-        'Unreachable'  => 'Urgent',
-        'No_show'      => 'Urgent',
-        'Bounced'      => 'Urgent'
-    ];
-    $new_reffeedback_actprio = $prio_map[$new_reffeedback_actstatus] ?? 'Normaal';
-
-    // Reset bij negatieve deelname status (annulering/afwijzing)
-    wachthond($extdebug, 2, "########################################################################");
-    wachthond($extdebug, 1, "### MAAK DE WAARDEN LEEG INDIEN DEELNAME GEANNULEERD (REF FEEDBACK)");
-    wachthond($extdebug, 2, "########################################################################");
-
-    $status_data     = find_partstatus();
-    $status_negative = $status_data['ids']['Negative'] ?? [];
-
-    if (!empty($ditjaar_one_leid_status_id) && in_array($ditjaar_one_leid_status_id, $status_negative)) {
-        wachthond($extdebug, 1, "STATUS NEGATIVE DETECTED - RESET REF FEEDBACK", $ditjaar_one_leid_status_id);
-        $new_cont_refstatus        = "onbekend";
-        $new_part_refstatus        = "onbekend";
-        $new_reffeedback_actstatus = 'Not Required';
-    }
-
-    // Deelname status matchen aan contact status indien in dit jaar
-    if (infiscalyear($ditevent_part_kampstart, $today_datetime) == 1) {
-        $new_part_refstatus = $new_cont_refstatus;
-    }
-
-    // Datum bepaling Activity
-    if (infiscalyear($ref_datum, $ditevent_part_kampstart) == 1) {
-        $new_reffeedback_actdatum = $ref_datum;
-    } elseif (infiscalyear($ref_verzoek, $ditevent_part_kampstart) == 1) {
-        $new_reffeedback_actdatum = date('Y-m-d H:i:s', strtotime($ref_verzoek . ' +30 days'));
-    } else {
-        $new_reffeedback_actdatum = $ditevent_part_kampstart;
-    }
-
-    // Correctie als verzoek na start kamp ligt
-    if (date_bigger($ref_verzoek, $ditevent_part_kampstart) == 1) {
-        $new_reffeedback_actdatum = $ditevent_part_kampeinde;
-    }
-
-    // Voorbereiden van de return array
-    $status_reffeedback_array = [
+    return [
         'displayname'               => $displayname,
         'contact_id'                => $contact_id,
         'part_id'                   => $ditevent_part_id,
@@ -299,20 +78,150 @@ function intake_status_reffeedback($contact_id, $part_array, $refdata_array, $re
         'kamp_rol'                  => $ditevent_part_rol,
         'kamp_functie'              => $ditevent_part_functie,
         'new_cont_refstatus'        => $new_cont_refstatus,
-        'new_part_refstatus'        => $new_part_refstatus,
+        'activity_type_naam'        => 'REF_persoon',
+        'new_refpersoon_actdatum'   => $new_refpersoon_actdatum,
+        'new_refpersoon_actstatus'  => $new_refpersoon_actstatus,
+        'new_refpersoon_actprio'    => $new_refpersoon_actprio,
+    ];
+}
+
+function intake_status_reffeedback($contact_id, $part_array, $refdata_array, $refnodig, $groupID) {
+
+    $extdebug       = 3;
+    $today_datetime = date("Y-m-d H:i:s");
+
+    // Initialisatie
+    $displayname                    = $part_array['displayname']        ?? NULL;
+    $ditevent_part_kampkort         = $part_array['part_kampkort']      ?? NULL;
+
+    if (empty($contact_id)) { return NULL; }
+
+    // Mapping data
+    $ditevent_part_id           = $part_array['id']                     ?? NULL;
+    $ditevent_part_eventid      = $part_array['part_event_id']          ?? NULL;
+    $ditevent_part_kampnaam     = $part_array['part_kampnaam']          ?? NULL;
+    $ditevent_part_kampstart    = $part_array['part_kampstart']         ?? NULL;
+    $ditevent_part_kampeinde    = $part_array['part_kampeinde']         ?? NULL;
+    $ditevent_part_rol          = $part_array['part_rol']               ?? NULL;
+    $ditevent_part_functie      = $part_array['part_functie']           ?? NULL;
+
+    $ref_datum                  = $refdata_array['new_cont_refdatum']   ?? NULL;
+
+    wachthond($extdebug, 1, "### INTAKE STATUS - REF FEEDBACK VOOR $displayname");
+
+    // Fiscale check
+    $refdatum_infiscal_nu       = infiscalyear($ref_datum, $today_datetime) ?? 0;
+
+    // Defaults
+    $new_reffeedback_actstatus  = 'Scheduled';
+    $new_cont_refstatus         = 'onbekend';
+
+    // =========================================================================
+    // LOGICA VOOR ACTIVITEIT: REF FEEDBACK ONTVANGEN
+    // =========================================================================
+    if ($refdatum_infiscal_nu == 1) {
+        $new_cont_refstatus        = 'ontvangen';
+        $new_reffeedback_actstatus = 'Completed';
+    }
+    elseif ($refnodig == "noggoed") {
+        $new_cont_refstatus        = 'noggoed';
+        $new_reffeedback_actstatus = 'Not Required';
+    }
+    elseif (date_bigger($today_datetime, $ditevent_part_kampeinde)) {
+        $new_cont_refstatus        = 'verlopen';
+        $new_reffeedback_actstatus = 'Failed';
+    }
+
+    $new_reffeedback_actprio = 'Normaal';
+    $new_reffeedback_actdatum = $ref_datum ?: $ditevent_part_kampstart;
+
+    return [
+        'displayname'               => $displayname,
+        'contact_id'                => $contact_id,
+        'part_id'                   => $ditevent_part_id,
+        'event_id'                  => $ditevent_part_eventid,
+        'kamp_naam'                 => $ditevent_part_kampnaam,
+        'kamp_start'                => $ditevent_part_kampstart,
+        'kamp_rol'                  => $ditevent_part_rol,
+        'kamp_functie'              => $ditevent_part_functie,
+        'new_cont_refstatus'        => $new_cont_refstatus,
         'activity_type_naam'        => 'REF_feedback',
         'new_reffeedback_actdatum'  => $new_reffeedback_actdatum,
         'new_reffeedback_actstatus' => $new_reffeedback_actstatus,
         'new_reffeedback_actprio'   => $new_reffeedback_actprio,
     ];
-
-    wachthond($extdebug, 1, "########################################################################");
-    wachthond($extdebug, 1, "### INTAKE STATUS - BEPAAL STATUS REF FEEDBACK VOOR $displayname [$ditevent_part_kampkort]", "[EINDE]");
-    wachthond($extdebug, 1, "########################################################################");
-
-    return $status_reffeedback_array;
 }
 
+/**
+ * Bepaalt de overkoepelende REF status op basis van de refdata_array.
+ * * @param int   $contact_id
+ * @param array $part_array
+ * @param array $refdata_array (bevat de resultaten van persoon & feedback functies)
+ * @param string $refnodig
+ */
+function intake_status_ref_algemeen($contact_id, $part_array, $refdata_array, $refnodig) {
+    
+    $extdebug        = 2;
+    $algemene_status = 'onbekend';
+    
+    wachthond($extdebug, 1, "########################################################################");
+    wachthond($extdebug, 1, "### INTAKE STATUS [REF-ALGEMEEN] ANALYSE",                      "[START]");
+    wachthond($extdebug, 1, "########################################################################");
+
+    // =========================================================================
+    // STAP 1: DATA VERZAMELEN (FALLBACK INDIEN NODIG)
+    // =========================================================================
+
+    // Als de specifieke status_persoon of status_feedback velden niet in de array zitten, berekenen we ze on-the-fly
+    if (!isset($refdata_array['status_persoon']) || !isset($refdata_array['status_feedback'])) {
+        wachthond($extdebug, 2, "[FALLBACK] Deelstatussen ontbreken in array, bereken ze nu via sub-functies...");
+        
+        $res_p = intake_status_refpersoon($contact_id, $part_array, $refdata_array, $refnodig, NULL);
+        $res_f = intake_status_reffeedback($contact_id, $part_array, $refdata_array, $refnodig, NULL);
+        
+        $status_p = $res_p['new_cont_refstatus'] ?? 'onbekend';
+        $status_f = $res_f['new_cont_refstatus'] ?? 'onbekend';
+        
+        wachthond($extdebug, 3, "[DEBUG] Fallback resultaat: Persoon=$status_p, Feedback=$status_f");
+    } else {
+        $status_p = $refdata_array['status_persoon'];
+        $status_f = $refdata_array['status_feedback'];
+        wachthond($extdebug, 2, "[DATA] Deelstatussen gevonden in refdata_array.");
+    }
+
+    wachthond($extdebug, 2, "[CHECK] Status Persoon: $status_p | Status Feedback: $status_f | Nodig: $refnodig");
+
+    // =========================================================================
+    // STAP 2: HIERARCHIE VAN DE ALGEMENE STATUS (DE WATERVAL)
+    // =========================================================================
+
+    // 1. Feedback is binnen -> Alles OK
+    if ($status_f == 'ontvangen') {
+        wachthond($extdebug, 2, "[MATCH] Conditie 1: Feedback is ontvangen. Proces compleet.");
+        $algemene_status = 'ontvangen';
+    }
+    // 2. Persoon is doorgegeven/bekend, maar feedback nog niet (onbekend, vragen, etc.)
+    elseif ($status_p == 'vragen' || $status_p == 'ontvangen') {
+        wachthond($extdebug, 2, "[MATCH] Conditie 2: Persoon is bekend ($status_p), maar feedback nog niet binnen.");
+        // Zodra we een persoon hebben, 'vragen' we om de feedback (of we wachten erop)
+        $algemene_status = 'vragen';
+    }
+    // 3. Geen actie nodig op basis van historie (dit jaar alles nog geldig)
+    elseif ($refnodig == 'noggoed') {
+        wachthond($extdebug, 2, "[MATCH] Conditie 3: Geen actie nodig op basis van historie (noggoed).");
+        $algemene_status = 'noggoed';
+    }
+    // 4. Fallback op persoon-status (bijv. 'verlopen' of 'onbekend')
+    else {
+        wachthond($extdebug, 2, "[MATCH] Conditie 4: Geen specifieke match, overname status_persoon ($status_p).");
+        $algemene_status = $status_p;
+    }
+
+    wachthond($extdebug, 1, "### RESULTAAT ALGEMEEN: [$algemene_status]");
+    wachthond($extdebug, 1, "########################################################################");
+
+    return $algemene_status;
+}
 /**
  * Haalt referentie-informatie op.
  * * @param int    $contact_id
@@ -322,7 +231,7 @@ function intake_status_reffeedback($contact_id, $part_array, $refdata_array, $re
  */
 function intake_referentie_get($contact_id, $groupID = NULL, $mode = 'current') {
 
-    $extdebug       = 0;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
+    $extdebug       = 3;  //  1 = basic // 2 = verbose // 3 = params / 4 = results
     $apidebug       = FALSE;
     $today_datetime = date("Y-m-d H:i:s");
 
@@ -392,7 +301,7 @@ function intake_referentie_get($contact_id, $groupID = NULL, $mode = 'current') 
         wachthond($extdebug, 2, "Mode Selection", "CURRENT (Filtering by fiscal year)");
     }
 
-    wachthond($extdebug,3, 'params_ref_get',            $params_ref_get);
+    wachthond($extdebug,7, 'params_ref_get',            $params_ref_get);
     
     $result_ref_get = civicrm_api4('Relationship','get',$params_ref_get);
     

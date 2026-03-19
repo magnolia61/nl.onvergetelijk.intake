@@ -15,7 +15,7 @@
  */
 function intake_activity_get($contact_id, $array_activity, $array_period) {
 
-    $extdebug           = 3; 
+    $extdebug           = 0; 
     $apidebug           = FALSE;
 
     $activity_type_id   = $array_activity['activity_type_id']   ?? NULL;
@@ -159,7 +159,7 @@ function intake_activity_get($contact_id, $array_activity, $array_period) {
  */
 function intake_activity_create($contact_id, $array_activity, $part_array, $array_intake) {
 
-    $extdebug           = 3; 
+    $extdebug           = 0; 
     $apidebug           = FALSE;
 
     $activity_type_id   = $array_activity['activity_type_id']   ?? NULL;
@@ -262,7 +262,7 @@ function intake_activity_create($contact_id, $array_activity, $part_array, $arra
 //function intake_activity_update($contact_id, $array_activity, $part_array, $array_intake, $array_referentie) {
 function intake_activity_update($contact_id, $array_activity, $part_array, $array_intake) {
 
-    $extdebug           = 3; 
+    $extdebug           = 0; 
     $apidebug           = FALSE;
 
     $activity_id        = $array_activity['activity_id']        ?? NULL;
@@ -375,7 +375,7 @@ function intake_activity_update($contact_id, $array_activity, $part_array, $arra
  */
 function intake_activity_delete($contact_id, $activity_id) {
 
-    $extdebug           = 3; 
+    $extdebug           = 0; 
     $apidebug           = FALSE;
 
     wachthond($extdebug, 2, "########################################################################");
@@ -416,7 +416,7 @@ function intake_activity_delete($contact_id, $activity_id) {
  */
 function intake_activitytype_delete($contact_id, $array_activity, $array_period) {
 
-    $extdebug           = 3; 
+    $extdebug           = 0; 
     $apidebug           = FALSE;
 
     $activity_type_id   = $array_activity['activity_type_id']   ?? NULL;
